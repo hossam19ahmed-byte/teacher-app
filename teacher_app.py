@@ -18,7 +18,7 @@ st.set_page_config(
 # ---------------------------------------------------------
 USERS = {
     "hossam": "123456",
-    "admin": "admin2026",
+    "ahmed": "ahmed1994",
     "teacher": "pass1234"
 }
 
