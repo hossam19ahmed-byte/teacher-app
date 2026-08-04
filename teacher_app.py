@@ -7,7 +7,7 @@ from datetime import date
 # 1. إعدادات الصفحة
 # ---------------------------------------------------------
 st.set_page_config(
-    page_title="Tech Builder - نظام إدارة المدرسين",
+    page_title="Teacher application",
     page_icon="🎓",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -32,6 +32,20 @@ st.markdown(
             direction: rtl;
             text-align: right;
         }
+        /* تنسيق الهيدر للشعار مع النص */
+        .logo-header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .logo-text {
+            font-size: 32px;
+            font-weight: bold;
+            color: #0088cc; /* لون أزرق فاتح */
+            font-family: Arial, sans-serif;
+        }
     </style>
     """,
     unsafe_allow_html=True
@@ -52,8 +66,8 @@ supabase: Client = init_supabase()
 # 🔑 كلمة مرور لوحة الإدارة (الأدمن)
 ADMIN_PASSWORD = "admin_tech_builder_2026"
 
-# 🖼️ رابط اللوجو المباشر من ImgBB
-LOGO_URL = "https://i.ibb.co/0pWMGmXv/image.png"
+# 🖼️ رابط الصورة الجديد من ImgBB
+LOGO_URL = "https://i.ibb.co/Tx4d7kwX/image.png"
 
 # ---------------------------------------------------------
 # 3. إدارة الجلسة (Session State)
@@ -68,13 +82,18 @@ def login_screen():
     col1, col2, col3 = st.columns([1, 2, 1])
     
     with col2:
-        # عرض شعار الشركة أعلى الشاشة وفي المنتصف
-        try:
-            st.image(LOGO_URL, width=200)
-        except:
-            pass
+        # عرض الشعار وبجانبه اسم Tech Builder باللون الأزرق الفاتح والخط العريض
+        st.markdown(
+            f"""
+            <div class="logo-header">
+                <img src="{LOGO_URL}" width="70" style="vertical-align: middle;">
+                <span class="logo-text">Tech Builder</span>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
             
-        st.title("🔐 Tech Builder - نظام إدارة المدرسين")
+        st.title("🔐 Teacher application")
         st.markdown("---")
         
         tab_login, tab_admin = st.tabs(["دخول المعلمين 👤", "لوحة الإدارة 🛠️"])
