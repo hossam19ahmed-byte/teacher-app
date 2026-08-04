@@ -13,6 +13,30 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# 🌐 تطبيق الاتجاه من اليمين إلى اليسار (RTL) وتوجيه النصوص لليمين
+st.markdown(
+    """
+    <style>
+        /* اتجاه الصفحة بالكامل من اليمين إلى اليسار */
+        html, body, [class*="css"] {
+            direction: rtl;
+            text-align: right;
+        }
+        /* القائمة الجانبية */
+        section[data-testid="stSidebar"] {
+            direction: rtl;
+            text-align: right;
+        }
+        /* المدخلات والقوائم */
+        .stTextInput, .stSelectbox, .stNumberInput, .stDateInput {
+            direction: rtl;
+            text-align: right;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 # ---------------------------------------------------------
 # 2. إعدادات الاتصال بـ Supabase
 # ---------------------------------------------------------
@@ -28,6 +52,9 @@ supabase: Client = init_supabase()
 # 🔑 كلمة مرور لوحة الإدارة (الأدمن)
 ADMIN_PASSWORD = "admin_tech_builder_2026"
 
+# 🖼️ رابط اللوجو المباشر من ImgBB
+LOGO_URL = "https://i.ibb.co/0pWMGmXv/image.png"
+
 # ---------------------------------------------------------
 # 3. إدارة الجلسة (Session State)
 # ---------------------------------------------------------
@@ -38,11 +65,18 @@ if "user" not in st.session_state:
 # 4. شاشة تسجيل الدخول + لوحة الأدمن
 # ---------------------------------------------------------
 def login_screen():
-    st.title("🔐 Tech Builder - نظام إدارة المدرسين")
-    st.markdown("---")
-    
     col1, col2, col3 = st.columns([1, 2, 1])
+    
     with col2:
+        # عرض شعار الشركة أعلى الشاشة وفي المنتصف
+        try:
+            st.image(LOGO_URL, width=200)
+        except:
+            pass
+            
+        st.title("🔐 Tech Builder - نظام إدارة المدرسين")
+        st.markdown("---")
+        
         tab_login, tab_admin = st.tabs(["دخول المعلمين 👤", "لوحة الإدارة 🛠️"])
         
         # --- تبويب دخول العملاء ---
