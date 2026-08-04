@@ -119,8 +119,20 @@ def login_screen():
             elif admin_pass:
                 st.error("كلمة مرور الأدمن غير صحيحة.")
 
-        st.markdown("<br><hr><center><small>للحصول على حساب جديد أو تجديد الاشتراك، يرجى التواصل مع الإدارة (Tech Builder)</small></center>", unsafe_allow_html=True)
-
+st.markdown(
+    """
+    <br><hr>
+    <center>
+        <p style='font-size: 14px;'>للحصول على حساب جديد أو تجديد الاشتراك، يرجى التواصل مع الإدارة <b>(Tech Builder)</b></p>
+        <a href='https://wa.me/201218505995' target='_blank' style='text-decoration: none;'>
+            <button style='background-color: #25D366; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold;'>
+                💬 التواصل عبر واتساب: 01218505995
+            </button>
+        </a>
+    </center>
+    """, 
+    unsafe_allow_html=True
+)
 if not st.session_state.user:
     login_screen()
     st.stop()
