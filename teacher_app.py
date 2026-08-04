@@ -1,4 +1,4 @@
-import sqlite3
+from supabase import create_client, Client
 import pandas as pd
 import streamlit as st
 from datetime import date
@@ -14,89 +14,83 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------
-# 2. بيانات المستخدمين (اسم المستخدم : كلمة المرور)
+# 2. إعدادات الاتصال بـ Supabase
 # ---------------------------------------------------------
-USERS = {
-    "hossam": "123456",
-    "ahmed": "ahmed1994",
-    "teacher": "pass1234"
-}
+SUPABASE_URL = "https://qzwtydeouokiyzvmwomt.supabase.co"
+SUPABASE_KEY = "sb_publishable_ZX1OTDet7YD6-VWa5OiBJg_Jx_Zz4Rm"
 
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-if "username" not in st.session_state:
-    st.session_state.username = ""
+@st.cache_resource
+def init_supabase():
+    return create_client(SUPABASE_URL, SUPABASE_KEY)
+
+supabase: Client = init_supabase()
 
 # ---------------------------------------------------------
-# 3. شاشة تسجيل الدخول
+# 3. إدارة الجلسة (Session State)
+# ---------------------------------------------------------
+if "user" not in st.session_state:
+    st.session_state.user = None
+
+# ---------------------------------------------------------
+# 4. شاشة تسجيل الدخول وإنشاء الحساب
 # ---------------------------------------------------------
 def login_screen():
-    st.title("🔐 تسجيل الدخول - نظام إدارة المدرسين")
+    st.title("🔐 نظام إدارة المدرسين - تسجيل الدخول")
     st.markdown("---")
     
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        username = st.text_input("اسم المستخدم:")
-        password = st.text_input("كلمة المرور:", type="password")
-        login_btn = st.button("دخول", use_container_width=True)
+        tab1, tab2 = st.tabs(["تسجيل دخول", "إنشاء حساب جديد"])
         
-        if login_btn:
-            if username in USERS and USERS[username] == password:
-                st.session_state.logged_in = True
-                st.session_state.username = username
-                st.success(f"مرحباً بك {username}! جاري التحميل...")
-                st.rerun()
-            else:
-                st.error("اسم المستخدم أو كلمة المرور غير صحيحة.")
+        with tab1:
+            username = st.text_input("اسم المستخدم:")
+            password = st.text_input("كلمة المرور:", type="password")
+            if st.button("دخول", use_container_width=True):
+                if username and password:
+                    res = supabase.table("users").select("*").eq("username", username).eq("password_hash", password).execute()
+                    if res.data:
+                        st.session_state.user = res.data[0]
+                        st.success(f"مرحباً بك أستاذ {res.data[0]['teacher_name']}!")
+                        st.rerun()
+                    else:
+                        st.error("اسم المستخدم أو كلمة المرور غير صحيحة.")
+                else:
+                    st.warning("يرجى إدخال البيانات كاملة.")
+                    
+        with tab2:
+            new_teacher_name = st.text_input("اسم المعلم الكامل:")
+            new_username = st.text_input("اسم المستخدم الجديد:")
+            new_password = st.text_input("كلمة المرور الجديدة:", type="password")
+            if st.button("إنشاء حساب", use_container_width=True):
+                if new_teacher_name and new_username and new_password:
+                    try:
+                        supabase.table("users").insert({
+                            "username": new_username.strip(),
+                            "password_hash": new_password,
+                            "teacher_name": new_teacher_name.strip()
+                        }).execute()
+                        st.success("تم إنشاء الحساب بنجاح! يمكنك الآن تسجيل الدخول.")
+                    except Exception as e:
+                        st.error("حدث خطأ: قد يكون اسم المستخدم مُسجلاً من قبل.")
+                else:
+                    st.warning("يرجى ملء كافة الحقول.")
 
-if not st.session_state.logged_in:
+if not st.session_state.user:
     login_screen()
     st.stop()
 
 # ---------------------------------------------------------
-# 4. قاعدة البيانات (تأتي بعد تسجيل الدخول)
+# 5. البيانات الخاصة بالمعلم الحالي
 # ---------------------------------------------------------
-conn = sqlite3.connect("teacher_data.db", check_same_thread=False)
-cursor = conn.cursor()
-
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS groups (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    group_name TEXT UNIQUE NOT NULL
-)
-""")
-
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS students (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    student_name TEXT NOT NULL,
-    group_id INTEGER,
-    FOREIGN KEY (group_id) REFERENCES groups (id) ON DELETE CASCADE
-)
-""")
-
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS attendance (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    student_id INTEGER,
-    group_id INTEGER,
-    session_date DATE,
-    status TEXT,
-    exam_score REAL,
-    paid INTEGER DEFAULT 0,
-    FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE CASCADE,
-    FOREIGN KEY (group_id) REFERENCES groups (id) ON DELETE CASCADE
-)
-""")
-conn.commit()
+current_user_id = st.session_state.user["id"]
+teacher_display_name = st.session_state.user["teacher_name"]
 
 # ---------------------------------------------------------
-# 5. القائمة الجانبية وزر الخروج
+# 6. القائمة الجانبية وزر الخروج
 # ---------------------------------------------------------
-st.sidebar.title(f"👤 مرحباً: {st.session_state.username}")
+st.sidebar.title(f"👤 مرحباً: أ/ {teacher_display_name}")
 if st.sidebar.button("تسجيل الخروج 🚪"):
-    st.session_state.logged_in = False
-    st.session_state.username = ""
+    st.session_state.user = None
     st.rerun()
 
 st.sidebar.markdown("---")
@@ -125,18 +119,21 @@ if menu == "1️⃣ تكويد وإدارة المجموعات والطلاب":
         if st.button("حفظ المجموعة"):
             if new_group.strip():
                 try:
-                    cursor.execute("INSERT INTO groups (group_name) VALUES (?)", (new_group.strip(),))
-                    conn.commit()
+                    supabase.table("groups").insert({
+                        "user_id": current_user_id,
+                        "group_name": new_group.strip()
+                    }).execute()
                     st.success(f"تمت إضافة المجموعة '{new_group}' بنجاح!")
                     st.rerun()
-                except sqlite3.IntegrityError:
-                    st.error("هذه المجموعة مضافة بالفعل.")
+                except Exception as e:
+                    st.error("حدث خطأ أثناء إضافة المجموعة.")
             else:
                 st.warning("يرجى إدخال اسم المجموعة.")
 
     with col2:
         st.subheader("➕ إضافة طالب إلى مجموعة")
-        df_groups = pd.read_sql_query("SELECT * FROM groups", conn)
+        res_groups = supabase.table("groups").select("*").eq("user_id", current_user_id).execute()
+        df_groups = pd.DataFrame(res_groups.data)
         
         if not df_groups.empty:
             group_selected = st.selectbox("اختر المجموعة:", df_groups["group_name"].tolist())
@@ -145,8 +142,11 @@ if menu == "1️⃣ تكويد وإدارة المجموعات والطلاب":
             if st.button("حفظ الطالب"):
                 if student_name.strip():
                     group_id = int(df_groups[df_groups["group_name"] == group_selected]["id"].values[0])
-                    cursor.execute("INSERT INTO students (student_name, group_id) VALUES (?, ?)", (student_name.strip(), group_id))
-                    conn.commit()
+                    supabase.table("students").insert({
+                        "user_id": current_user_id,
+                        "group_id": group_id,
+                        "student_name": student_name.strip()
+                    }).execute()
                     st.success(f"تمت إضافة الطالب '{student_name}' إلى مجموعة '{group_selected}'.")
                     st.rerun()
                 else:
@@ -156,23 +156,19 @@ if menu == "1️⃣ تكويد وإدارة المجموعات والطلاب":
 
     st.markdown("---")
     
-    # ---------------------------------------------------------
-    # قسم حذف وتعديل البيانات
-    # ---------------------------------------------------------
-    st.subheader("🗑️ إدارة وحذف البيانات (للتجربة والمسح)")
-    
-    del_tab1, del_tab2, del_tab3 = st.tabs(["حذف طالب", "حذف مجموعة كاملة", "⚠️ مسح قاعدة البيانات بالكامل"])
+    # قسم الحذف والإدارة
+    st.subheader("🗑️ إدارة وحذف البيانات")
+    del_tab1, del_tab2 = st.tabs(["حذف طالب", "حذف مجموعة كاملة"])
     
     with del_tab1:
-        df_all_stds = pd.read_sql_query("SELECT id, student_name FROM students", conn)
+        res_stds = supabase.table("students").select("*").eq("user_id", current_user_id).execute()
+        df_all_stds = pd.DataFrame(res_stds.data)
         if not df_all_stds.empty:
             std_to_del = st.selectbox("اختر الطالب للمسح:", df_all_stds["student_name"].tolist(), key="del_std_select")
             if st.button("حذف الطالب المحدد"):
                 std_id = int(df_all_stds[df_all_stds["student_name"] == std_to_del]["id"].values[0])
-                cursor.execute("DELETE FROM attendance WHERE student_id = ?", (std_id,))
-                cursor.execute("DELETE FROM students WHERE id = ?", (std_id,))
-                conn.commit()
-                st.success(f"تم حذف الطالب '{std_to_del}' وكل سجلاته بنجاح!")
+                supabase.table("students").delete().eq("id", std_id).execute()
+                st.success(f"تم حذف الطالب '{std_to_del}' بنجاح!")
                 st.rerun()
         else:
             st.info("لا يوجد طلاب لحذفهم.")
@@ -182,50 +178,45 @@ if menu == "1️⃣ تكويد وإدارة المجموعات والطلاب":
             grp_to_del = st.selectbox("اختر المجموعة للمسح:", df_groups["group_name"].tolist(), key="del_grp_select")
             if st.button("حذف المجموعة وكل طلابها"):
                 grp_id = int(df_groups[df_groups["group_name"] == grp_to_del]["id"].values[0])
-                cursor.execute("DELETE FROM attendance WHERE group_id = ?", (grp_id,))
-                cursor.execute("DELETE FROM students WHERE group_id = ?", (grp_id,))
-                cursor.execute("DELETE FROM groups WHERE id = ?", (grp_id,))
-                conn.commit()
-                st.success(f"تم حذف المجموعة '{grp_to_del}' وجميع طلابها وسجلاتها بنجاح!")
+                supabase.table("groups").delete().eq("id", grp_id).execute()
+                st.success(f"تم حذف المجموعة '{grp_to_del}' بنجاح!")
                 st.rerun()
         else:
             st.info("لا توجد مجموعات لحذفها.")
 
-    with del_tab3:
-        st.error("تنبيه: هذا الخيار سيقوم بمسح جميع المجموعات والطلاب وسجلات الحضور والدفع نهائياً!")
-        if st.button("🔥 مسح كافة البيانات وتصفير النظام"):
-            cursor.execute("DELETE FROM attendance")
-            cursor.execute("DELETE FROM students")
-            cursor.execute("DELETE FROM groups")
-            conn.commit()
-            st.success("تم مسح كافة البيانات بنجاح وأصبح النظام خالياً تماماً!")
-            st.rerun()
-
     st.markdown("---")
     st.subheader("📋 قائمة المجموعات والطلاب المسجلين حالياً")
-    df_all_students = pd.read_sql_query("""
-        SELECT s.id AS 'ID الطالب', s.student_name AS 'اسم الطالب', g.group_name AS 'المجموعة'
-        FROM students s
-        JOIN groups g ON s.group_id = g.id
-    """, conn)
-    st.dataframe(df_all_students, use_container_width=True)
+    res_full = supabase.table("students").select("id, student_name, groups(group_name)").eq("user_id", current_user_id).execute()
+    if res_full.data:
+        formatted_data = []
+        for item in res_full.data:
+            formatted_data.append({
+                "ID الطالب": item["id"],
+                "اسم الطالب": item["student_name"],
+                "المجموعة": item["groups"]["group_name"] if item.get("groups") else "-"
+            })
+        st.dataframe(pd.DataFrame(formatted_data), use_container_width=True)
+    else:
+        st.info("لا يوجد طلاب مسجلون بعد.")
 
 # ---------------------------------------------------------
-# باقي الصفحات (حضور - كشف حساب - تقارير)
+# الصفحة الثانية: تسجيل الحضور والدرجات والدفع
 # ---------------------------------------------------------
 elif menu == "2️⃣ تسجيل الحضور والدرجات والدفع":
     st.header("📝 تسجيل الحضور والدرجات والتحصيل")
     
-    df_groups = pd.read_sql_query("SELECT * FROM groups", conn)
+    res_groups = supabase.table("groups").select("*").eq("user_id", current_user_id).execute()
+    df_groups = pd.DataFrame(res_groups.data)
+    
     if df_groups.empty:
         st.warning("لا توجد مجموعات معرفة. يرجى إضافة مجموعات أولاً.")
     else:
         group_selected = st.selectbox("اختر المجموعة:", df_groups["group_name"].tolist())
         group_id = int(df_groups[df_groups["group_name"] == group_selected]["id"].values[0])
+        session_date = st.date_input("تاريخ الحصة:", date.today())
         
-        session_date = st.date_input("تاريخ الحصه:", date.today())
-        
-        students_in_group = pd.read_sql_query("SELECT id, student_name FROM students WHERE group_id = ?", conn, params=(group_id,))
+        res_stds = supabase.table("students").select("id, student_name").eq("group_id", group_id).execute()
+        students_in_group = pd.DataFrame(res_stds.data)
         
         if students_in_group.empty:
             st.info("لا يوجد طلاب مسجلون في هذه المجموعة.")
@@ -238,8 +229,8 @@ elif menu == "2️⃣ تسجيل الحضور والدرجات والدفع":
                     st.markdown(f"**👤 الطالب: {row['student_name']}**")
                     col1, col2, col3 = st.columns([2, 2, 2])
                     
-                    count_query = "SELECT COUNT(*) FROM attendance WHERE student_id = ?"
-                    sess_count = cursor.execute(count_query, (row["id"],)).fetchone()[0]
+                    res_att = supabase.table("attendance").select("id").eq("student_id", row["id"]).execute()
+                    sess_count = len(res_att.data)
                     is_fourth = (sess_count + 1) % 4 == 0
                     
                     with col1:
@@ -256,35 +247,36 @@ elif menu == "2️⃣ تسجيل الحضور والدرجات والدفع":
                     st.markdown("---")
                     
                     records.append({
-                        "student_id": row["id"],
+                        "user_id": current_user_id,
+                        "student_id": int(row["id"]),
                         "group_id": group_id,
                         "session_date": str(session_date),
-                        "status": status,
-                        "exam_score": score,
+                        "attended": True if status == "حضر" else False,
                         "paid": 1 if paid else 0
                     })
                 
                 submit = st.form_submit_button("💾 حفظ بيانات الحصة")
                 if submit:
-                    for rec in records:
-                        cursor.execute("""
-                            INSERT INTO attendance (student_id, group_id, session_date, status, exam_score, paid)
-                            VALUES (?, ?, ?, ?, ?, ?)
-                        """, (rec["student_id"], rec["group_id"], rec["session_date"], rec["status"], rec["exam_score"], rec["paid"]))
-                    conn.commit()
+                    supabase.table("attendance").insert(records).execute()
                     st.success("تم حفظ الحضور والدرجات والتحصيلات بنجاح!")
 
+# ---------------------------------------------------------
+# الصفحة الثالثة: كشف حساب طالب
+# ---------------------------------------------------------
 elif menu == "3️⃣ كشف حساب طالب (تاريخ/حضور/درجات)":
     st.header("🔍 كشف حضور ودرجات طالب")
     
-    df_groups = pd.read_sql_query("SELECT * FROM groups", conn)
+    res_groups = supabase.table("groups").select("*").eq("user_id", current_user_id).execute()
+    df_groups = pd.DataFrame(res_groups.data)
+    
     if not df_groups.empty:
         col1, col2 = st.columns(2)
         with col1:
             group_selected = st.selectbox("اختر المجموعة:", df_groups["group_name"].tolist())
             group_id = int(df_groups[df_groups["group_name"] == group_selected]["id"].values[0])
             
-        students_in_group = pd.read_sql_query("SELECT id, student_name FROM students WHERE group_id = ?", conn, params=(group_id,))
+        res_stds = supabase.table("students").select("id, student_name").eq("group_id", group_id).execute()
+        students_in_group = pd.DataFrame(res_stds.data)
         
         with col2:
             if not students_in_group.empty:
@@ -293,7 +285,6 @@ elif menu == "3️⃣ كشف حساب طالب (تاريخ/حضور/درجات)"
             else:
                 student_selected = None
 
-        st.subheader("فلترة بالتاريخ:")
         col_d1, col_d2 = st.columns(2)
         with col_d1:
             start_date = st.date_input("من تاريخ:", date(2026, 1, 1))
@@ -301,38 +292,48 @@ elif menu == "3️⃣ كشف حساب طالب (تاريخ/حضور/درجات)"
             end_date = st.date_input("إلى تاريخ:", date.today())
 
         if student_selected:
-            query = """
-                SELECT session_date AS 'تاريخ الحصة', status AS 'حالة الحضور', exam_score AS 'درجة الامتحان',
-                       CASE WHEN paid = 1 THEN 'تم الدفع' ELSE 'لم يدفع' END AS 'حالة الدفع'
-                FROM attendance
-                WHERE student_id = ? AND session_date BETWEEN ? AND ?
-                ORDER BY session_date DESC
-            """
-            df_student_report = pd.read_sql_query(query, conn, params=(student_id, str(start_date), str(end_date)))
-            st.dataframe(df_student_report, use_container_width=True)
+            res_att = supabase.table("attendance").select("*").eq("student_id", student_id).gte("session_date", str(start_date)).lte("session_date", str(end_date)).execute()
+            if res_att.data:
+                df_rep = pd.DataFrame(res_att.data)
+                df_rep["حالة الحضور"] = df_rep["attended"].apply(lambda x: "حضر" if x else "غائب")
+                df_rep["حالة الدفع"] = df_rep["paid"].apply(lambda x: "تم الدفع" if x == 1 else "لم يدفع")
+                df_display = df_rep[["session_date", "حالة الحضور", "حالة الدفع"]].rename(columns={"session_date": "تاريخ الحصة"})
+                st.dataframe(df_display, use_container_width=True)
+            else:
+                st.info("لا توجد سجلات لهذا الطالب في هذه الفترة.")
 
+# ---------------------------------------------------------
+# الصفحة الرابعة: تقرير موقف الدفع للطلاب
+# ---------------------------------------------------------
 elif menu == "4️⃣ تقرير موقف الدفع للطلاب":
     st.header("📊 تقرير سداد المصروفات حسب المجموعة")
     
-    df_groups = pd.read_sql_query("SELECT * FROM groups", conn)
+    res_groups = supabase.table("groups").select("*").eq("user_id", current_user_id).execute()
+    df_groups = pd.DataFrame(res_groups.data)
+    
     if not df_groups.empty:
         group_selected = st.selectbox("اختر المجموعة للتقرير:", df_groups["group_name"].tolist())
         group_id = int(df_groups[df_groups["group_name"] == group_selected]["id"].values[0])
         
-        query = """
-            SELECT s.student_name AS 'اسم الطالب',
-                   COUNT(a.id) AS 'إجمالي الحضور/الغياب',
-                   SUM(a.paid) AS 'عدد مرات السداد'
-            FROM students s
-            LEFT JOIN attendance a ON s.id = a.student_id
-            WHERE s.group_id = ?
-            GROUP BY s.id
-        """
-        df_pay_report = pd.read_sql_query(query, conn, params=(group_id,))
-        df_pay_report["موقف الدفع"] = df_pay_report["عدد مرات السداد"].apply(lambda x: "مسدد ✅" if x and x > 0 else "غير مسدد ❌")
+        res_stds = supabase.table("students").select("id, student_name").eq("group_id", group_id).execute()
+        df_stds = pd.DataFrame(res_stds.data)
         
-        st.dataframe(df_pay_report, use_container_width=True)
+        if not df_stds.empty:
+            report_list = []
+            for _, std in df_stds.iterrows():
+                res_att = supabase.table("attendance").select("paid").eq("student_id", std["id"]).execute()
+                paid_count = sum([1 for item in res_att.data if item.get("paid") == 1])
+                report_list.append({
+                    "اسم الطالب": std["student_name"],
+                    "إجمالي الحصص المسجلة": len(res_att.data),
+                    "عدد مرات السداد": paid_count,
+                    "موقف الدفع": "مسدد ✅" if paid_count > 0 else "غير مسدد ❌"
+                })
+            st.dataframe(pd.DataFrame(report_list), use_container_width=True)
 
+# ---------------------------------------------------------
+# الصفحة الخامسة: تقرير الإيرادات والتحصيلات
+# ---------------------------------------------------------
 elif menu == "5️⃣ تقرير الإيرادات والتحصيلات":
     st.header("💰 تقرير المتحصلات المالية للمجموعات")
     
@@ -344,19 +345,19 @@ elif menu == "5️⃣ تقرير الإيرادات والتحصيلات":
         
     session_price = st.number_input("سعر الاشتراك / الحصة الرابعة (جنيه):", min_value=0, value=200)
 
-    query = """
-        SELECT g.group_name AS 'المجموعة',
-               SUM(a.paid) AS 'عدد المدفوعات'
-        FROM attendance a
-        JOIN groups g ON a.group_id = g.id
-        WHERE a.session_date BETWEEN ? AND ?
-        GROUP BY g.id
-    """
-    df_rev = pd.read_sql_query(query, conn, params=(str(start_date), str(end_date)))
+    res_att = supabase.table("attendance").select("paid, groups(group_name)").eq("user_id", current_user_id).gte("session_date", str(start_date)).lte("session_date", str(end_date)).execute()
     
-    if not df_rev.empty:
-        df_rev["إجمالي المبلغ المحصل"] = df_rev["عدد المدفوعات"] * session_price
-        st.dataframe(df_rev, use_container_width=True)
-        st.metric("إجمالي التحصيلات الكلية", f"{df_rev['إجمالي المبلغ المحصل'].sum()} جنيه")
+    if res_att.data:
+        paid_records = [r for r in res_att.data if r.get("paid") == 1]
+        if paid_records:
+            df_rev = pd.DataFrame(paid_records)
+            df_rev["المجموعة"] = df_rev["groups"].apply(lambda x: x["group_name"] if x else "غير محدد")
+            summary = df_rev.groupby("المجموعة").size().reset_index(name="عدد المدفوعات")
+            summary["إجمالي المبلغ المحصل"] = summary["عدد المدفوعات"] * session_price
+            
+            st.dataframe(summary, use_container_width=True)
+            st.metric("إجمالي التحصيلات الكلية", f"{summary['إجمالي المبلغ المحصل'].sum()} جنيه")
+        else:
+            st.info("لا توجد تحصيلات مالية في هذه الفترة.")
     else:
         st.info("لا توجد تحصيلات مالية في هذه الفترة.")
