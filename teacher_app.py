@@ -25,6 +25,9 @@ def init_supabase():
 
 supabase: Client = init_supabase()
 
+# 🔑 كلمة مرور لوحة الإدارة (الأدمن) الخاصة بك
+ADMIN_PASSWORD = "admin_tech_builder_2026"
+
 # ---------------------------------------------------------
 # 3. إدارة الجلسة (Session State)
 # ---------------------------------------------------------
@@ -32,30 +35,61 @@ if "user" not in st.session_state:
     st.session_state.user = None
 
 # ---------------------------------------------------------
-# 4. شاشة تسجيل الدخول (خاصة بالعملاء المشتركين فقط)
+# 4. شاشة تسجيل الدخول + لوحة الأدمن
 # ---------------------------------------------------------
 def login_screen():
     st.title("🔐 Tech Builder - نظام إدارة المدرسين")
-    st.markdown("##### تسجيل الدخول للحساب")
     st.markdown("---")
     
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        username = st.text_input("اسم المستخدم:")
-        password = st.text_input("كلمة المرور:", type="password")
+        tab_login, tab_admin = st.tabs(["دخول المعلمين 👤", "لوحة الإدارة 🛠️"])
         
-        if st.button("دخول 🚪", use_container_width=True):
-            if username and password:
-                res = supabase.table("users").select("*").eq("username", username.strip()).eq("password_hash", password.strip()).execute()
-                if res.data:
-                    st.session_state.user = res.data[0]
-                    st.success(f"مرحباً بك أستاذ {res.data[0]['teacher_name']}!")
-                    st.rerun()
+        # --- تبويب دخول العملاء ---
+        with tab_login:
+            st.markdown("##### تسجيل الدخول للحساب")
+            username = st.text_input("اسم المستخدم:")
+            password = st.text_input("كلمة المرور:", type="password")
+            
+            if st.button("دخول 🚪", use_container_width=True):
+                if username and password:
+                    res = supabase.table("users").select("*").eq("username", username.strip()).eq("password_hash", password.strip()).execute()
+                    if res.data:
+                        st.session_state.user = res.data[0]
+                        st.success(f"مرحباً بك أستاذ {res.data[0]['teacher_name']}!")
+                        st.rerun()
+                    else:
+                        st.error("اسم المستخدم أو كلمة المرور غير صحيحة.")
                 else:
-                    st.error("اسم المستخدم أو كلمة المرور غير صحيحة.")
-            else:
-                st.warning("يرجى إدخال اسم المستخدم وكلمة المرور.")
+                    st.warning("يرجى إدخال اسم المستخدم وكلمة المرور.")
+                    
+        # --- تبويب لوحة الأدمن لإنشاء الحسابات ---
+        with tab_admin:
+            st.markdown("##### إضافة معلم جديد (خاص بالجهة المنفذة)")
+            admin_pass = st.text_input("كلمة مرور الأدمن:", type="password", key="admin_pass_key")
+            
+            if admin_pass == ADMIN_PASSWORD:
+                st.success("تم التحقق من هية الأدمن ✅")
+                new_teacher = st.text_input("اسم المعلم الكامل (اللقب):")
+                new_user = st.text_input("اسم المستخدم الجديد للعميل:")
+                new_pass = st.text_input("كلمة المرور للعميل:", type="password", key="new_user_pass_key")
                 
+                if st.button("➕ إنشاء حساب للعميل", use_container_width=True):
+                    if new_teacher and new_user and new_pass:
+                        try:
+                            supabase.table("users").insert({
+                                "username": new_user.strip(),
+                                "password_hash": new_pass.strip(),
+                                "teacher_name": new_teacher.strip()
+                            }).execute()
+                            st.success(f"تم إنشاء حساب المعلم '{new_teacher}' بنجاح!")
+                        except Exception as e:
+                            st.error("حدث خطأ: اسم المستخدم مُسجل بالفعل أو يوجد مشكلة بالشبكة.")
+                    else:
+                        st.warning("يرجى استكمال جميع البيانات المطلوب إدخالها.")
+            elif admin_pass:
+                st.error("كلمة مرور الأدمن غير صحيحة.")
+
         st.markdown("<br><hr><center><small>للحصول على حساب جديد أو تجديد الاشتراك، يرجى التواصل مع الإدارة (Tech Builder)</small></center>", unsafe_allow_html=True)
 
 if not st.session_state.user:
