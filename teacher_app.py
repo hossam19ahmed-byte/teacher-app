@@ -183,7 +183,7 @@ def login_screen():
                             st.success(f"تم إنشاء حساب المعلم '{new_teacher}' بنجاح!")
                             st.rerun()
                         except Exception as e:
-                            st.error("حدث خطأ: اسم المستخدم مُسجل بالفعل أو هناك مشكلة بالنظام.")
+                            st.error(f"حدث خطأ أثناء الإنشاء: {e}")
                     else:
                         st.warning("يرجى استكمال جميع البيانات المطلوبة.")
                 
@@ -284,7 +284,8 @@ if menu == "1️⃣ تكويد وإدارة المجموعات والطلاب":
                     st.success(f"تمت إضافة المجموعة '{new_group}' بنجاح!")
                     st.rerun()
                 except Exception as e:
-                    st.error("حدث خطأ أثناء إضافة المجموعة.")
+                    # تم تعديل السطر لعرض السبب الدقيق للخطأ
+                    st.error(f"حدث خطأ أثناء إضافة المجموعة: {e}")
             else:
                 st.warning("يرجى إدخال اسم المجموعة.")
 
@@ -299,14 +300,17 @@ if menu == "1️⃣ تكويد وإدارة المجموعات والطلاب":
             
             if st.button("حفظ الطالب"):
                 if student_name.strip():
-                    group_id = int(df_groups[df_groups["group_name"] == group_selected]["id"].values[0])
-                    supabase.table("students").insert({
-                        "user_id": current_user_id,
-                        "group_id": group_id,
-                        "student_name": student_name.strip()
-                    }).execute()
-                    st.success(f"تمت إضافة الطالب '{student_name}' إلى مجموعة '{group_selected}'.")
-                    st.rerun()
+                    try:
+                        group_id = int(df_groups[df_groups["group_name"] == group_selected]["id"].values[0])
+                        supabase.table("students").insert({
+                            "user_id": current_user_id,
+                            "group_id": group_id,
+                            "student_name": student_name.strip()
+                        }).execute()
+                        st.success(f"تمت إضافة الطالب '{student_name}' إلى مجموعة '{group_selected}'.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"حدث خطأ أثناء إضافة الطالب: {e}")
                 else:
                     st.warning("يرجى إدخال اسم الطالب.")
         else:
@@ -324,10 +328,13 @@ if menu == "1️⃣ تكويد وإدارة المجموعات والطلاب":
         if not df_all_stds.empty:
             std_to_del = st.selectbox("اختر الطالب للمسح:", df_all_stds["student_name"].tolist(), key="del_std_select")
             if st.button("حذف الطالب المحدد"):
-                std_id = int(df_all_stds[df_all_stds["student_name"] == std_to_del]["id"].values[0])
-                supabase.table("students").delete().eq("id", std_id).execute()
-                st.success(f"تم حذف الطالب '{std_to_del}' بنجاح!")
-                st.rerun()
+                try:
+                    std_id = int(df_all_stds[df_all_stds["student_name"] == std_to_del]["id"].values[0])
+                    supabase.table("students").delete().eq("id", std_id).execute()
+                    st.success(f"تم حذف الطالب '{std_to_del}' بنجاح!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"حدث خطأ أثناء حذف الطالب: {e}")
         else:
             st.info("لا يوجد طلاب لحذفهم.")
 
@@ -335,10 +342,13 @@ if menu == "1️⃣ تكويد وإدارة المجموعات والطلاب":
         if not df_groups.empty:
             grp_to_del = st.selectbox("اختر المجموعة للمسح:", df_groups["group_name"].tolist(), key="del_grp_select")
             if st.button("حذف المجموعة وكل طلابها"):
-                grp_id = int(df_groups[df_groups["group_name"] == grp_to_del]["id"].values[0])
-                supabase.table("groups").delete().eq("id", grp_id).execute()
-                st.success(f"تم حذف المجموعة '{grp_to_del}' بنجاح!")
-                st.rerun()
+                try:
+                    grp_id = int(df_groups[df_groups["group_name"] == grp_to_del]["id"].values[0])
+                    supabase.table("groups").delete().eq("id", grp_id).execute()
+                    st.success(f"تم حذف المجموعة '{grp_to_del}' بنجاح!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"حدث خطأ أثناء حذف المجموعة: {e}")
         else:
             st.info("لا توجد مجموعات لحذفها.")
 
@@ -415,8 +425,11 @@ elif menu == "2️⃣ تسجيل الحضور والدرجات والدفع":
                 
                 submit = st.form_submit_button("💾 حفظ بيانات الحصة")
                 if submit:
-                    supabase.table("attendance").insert(records).execute()
-                    st.success("تم حفظ الحضور والدرجات والتحصيلات بنجاح!")
+                    try:
+                        supabase.table("attendance").insert(records).execute()
+                        st.success("تم حفظ الحضور والدرجات والتحصيلات بنجاح!")
+                    except Exception as e:
+                        st.error(f"حدث خطأ أثناء حفظ الحضور: {e}")
 
 # ---------------------------------------------------------
 # الصفحة الثالثة: كشف حساب طالب
