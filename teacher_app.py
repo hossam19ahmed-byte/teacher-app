@@ -13,7 +13,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 🌐 تطبيق الاتجاه من اليمين إلى اليسار (RTL) وتوجيه النصوص لليمين
+# 🌐 تطبيق الاتجاه من اليمين إلى اليسار (RTL) وتنسيق الهيدر والفوتر
 st.markdown(
     """
     <style>
@@ -38,7 +38,7 @@ st.markdown(
             align-items: center;
             justify-content: center;
             gap: 15px;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
         }
         .logo-text {
             font-size: 32px;
@@ -46,10 +46,51 @@ st.markdown(
             color: #0088cc; /* لون أزرق فاتح */
             font-family: Arial, sans-serif;
         }
+        /* تنسيق العنوان الرئيسي ليكون في المنتصف تماماً */
+        .app-title {
+            text-align: center;
+            font-size: 28px;
+            font-weight: bold;
+            margin-top: 5px;
+            margin-bottom: 20px;
+            color: #333333;
+        }
+        /* تنسيق الفوتر لأسفل الصفحة */
+        .footer-container {
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 1px solid #e6e6e6;
+            text-align: center;
+            font-size: 14px;
+            color: #666666;
+            direction: ltr; /* اتجاه إنجليزي لضمان تنسيق الإيميل والحقوق */
+        }
+        .footer-container a {
+            color: #0088cc;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .footer-container a:hover {
+            text-decoration: underline;
+        }
     </style>
     """,
     unsafe_allow_html=True
 )
+
+# ---------------------------------------------------------
+# دالة طباعة الفوتر في نهاية الصفحة
+# ---------------------------------------------------------
+def render_footer():
+    st.markdown(
+        """
+        <div class="footer-container">
+            <p style="margin-bottom: 5px;">© tech-builder</p>
+            <p><a href="mailto:support@tech-builder.uk">support@tech-builder.uk</a></p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 # ---------------------------------------------------------
 # 2. إعدادات الاتصال بـ Supabase
@@ -66,7 +107,7 @@ supabase: Client = init_supabase()
 # 🔑 كلمة مرور لوحة الإدارة (الأدمن)
 ADMIN_PASSWORD = "admin_tech_builder_2026"
 
-# 🖼️ رابط الصورة الجديد من ImgBB
+# 🖼️ رابط الصورة من ImgBB
 LOGO_URL = "https://i.ibb.co/Tx4d7kwX/image.png"
 
 # ---------------------------------------------------------
@@ -82,7 +123,7 @@ def login_screen():
     col1, col2, col3 = st.columns([1, 2, 1])
     
     with col2:
-        # عرض الشعار وبجانبه اسم Tech Builder باللون الأزرق الفاتح والخط العريض
+        # عرض الشعار وبجانبه اسم Tech Builder
         st.markdown(
             f"""
             <div class="logo-header">
@@ -93,7 +134,8 @@ def login_screen():
             unsafe_allow_html=True
         )
             
-        st.title("🔐 Teacher application")
+        # عرض العنوان Teacher application بدون قفل وفي منتصف الصفحة تماماً
+        st.markdown('<div class="app-title">Teacher application</div>', unsafe_allow_html=True)
         st.markdown("---")
         
         tab_login, tab_admin = st.tabs(["دخول المعلمين 👤", "لوحة الإدارة 🛠️"])
@@ -172,7 +214,7 @@ def login_screen():
             elif admin_pass:
                 st.error("كلمة مرور الأدمن غير صحيحة.")
 
-        # --- التذييل الخاص بالتواصل (زر واتساب بالأسفل) ---
+        # --- التذييل الخاص بالتواصل ---
         st.markdown(
             """
             <br><hr>
@@ -187,6 +229,9 @@ def login_screen():
             """, 
             unsafe_allow_html=True
         )
+
+    # إضافة الفوتر في صفحة تسجيل الدخول
+    render_footer()
 
 if not st.session_state.user:
     login_screen()
@@ -474,3 +519,8 @@ elif menu == "5️⃣ تقرير الإيرادات والتحصيلات":
             st.info("لا توجد تحصيلات مالية في هذه الفترة.")
     else:
         st.info("لا توجد تحصيلات مالية في هذه الفترة.")
+
+# ---------------------------------------------------------
+# عرض الفوتر الكودي المنفصل أسفل صفحات التطبيق الرئيسية
+# ---------------------------------------------------------
+render_footer()
