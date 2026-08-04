@@ -32,48 +32,31 @@ if "user" not in st.session_state:
     st.session_state.user = None
 
 # ---------------------------------------------------------
-# 4. شاشة تسجيل الدخول وإنشاء الحساب
+# 4. شاشة تسجيل الدخول (خاصة بالعملاء المشتركين فقط)
 # ---------------------------------------------------------
 def login_screen():
-    st.title("🔐 نظام إدارة المدرسين - تسجيل الدخول")
+    st.title("🔐 Tech Builder - نظام إدارة المدرسين")
+    st.markdown("##### تسجيل الدخول للحساب")
     st.markdown("---")
     
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        tab1, tab2 = st.tabs(["تسجيل دخول", "إنشاء حساب جديد"])
+        username = st.text_input("اسم المستخدم:")
+        password = st.text_input("كلمة المرور:", type="password")
         
-        with tab1:
-            username = st.text_input("اسم المستخدم:")
-            password = st.text_input("كلمة المرور:", type="password")
-            if st.button("دخول", use_container_width=True):
-                if username and password:
-                    res = supabase.table("users").select("*").eq("username", username).eq("password_hash", password).execute()
-                    if res.data:
-                        st.session_state.user = res.data[0]
-                        st.success(f"مرحباً بك أستاذ {res.data[0]['teacher_name']}!")
-                        st.rerun()
-                    else:
-                        st.error("اسم المستخدم أو كلمة المرور غير صحيحة.")
+        if st.button("دخول 🚪", use_container_width=True):
+            if username and password:
+                res = supabase.table("users").select("*").eq("username", username.strip()).eq("password_hash", password.strip()).execute()
+                if res.data:
+                    st.session_state.user = res.data[0]
+                    st.success(f"مرحباً بك أستاذ {res.data[0]['teacher_name']}!")
+                    st.rerun()
                 else:
-                    st.warning("يرجى إدخال البيانات كاملة.")
-                    
-        with tab2:
-            new_teacher_name = st.text_input("اسم المعلم الكامل:")
-            new_username = st.text_input("اسم المستخدم الجديد:")
-            new_password = st.text_input("كلمة المرور الجديدة:", type="password")
-            if st.button("إنشاء حساب", use_container_width=True):
-                if new_teacher_name and new_username and new_password:
-                    try:
-                        supabase.table("users").insert({
-                            "username": new_username.strip(),
-                            "password_hash": new_password,
-                            "teacher_name": new_teacher_name.strip()
-                        }).execute()
-                        st.success("تم إنشاء الحساب بنجاح! يمكنك الآن تسجيل الدخول.")
-                    except Exception as e:
-                        st.error("حدث خطأ: قد يكون اسم المستخدم مُسجلاً من قبل.")
-                else:
-                    st.warning("يرجى ملء كافة الحقول.")
+                    st.error("اسم المستخدم أو كلمة المرور غير صحيحة.")
+            else:
+                st.warning("يرجى إدخال اسم المستخدم وكلمة المرور.")
+                
+        st.markdown("<br><hr><center><small>للحصول على حساب جديد أو تجديد الاشتراك، يرجى التواصل مع الإدارة (Tech Builder)</small></center>", unsafe_allow_html=True)
 
 if not st.session_state.user:
     login_screen()
