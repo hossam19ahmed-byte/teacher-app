@@ -25,7 +25,7 @@ def init_supabase():
 
 supabase: Client = init_supabase()
 
-# 🔑 كلمة مرور لوحة الإدارة (الأدمن) الخاصة بك
+# 🔑 كلمة مرور لوحة الإدارة (الأدمن)
 ADMIN_PASSWORD = "admin_tech_builder_2026"
 
 # ---------------------------------------------------------
@@ -63,13 +63,16 @@ def login_screen():
                 else:
                     st.warning("يرجى إدخال اسم المستخدم وكلمة المرور.")
                     
-        # --- تبويب لوحة الأدمن لإنشاء الحسابات ---
+        # --- تبويب لوحة الأدمن (إنشاء وحذف الحسابات) ---
         with tab_admin:
-            st.markdown("##### إضافة معلم جديد (خاص بالجهة المنفذة)")
+            st.markdown("##### إدارة حسابات المعلمين (خاص بالجهة المنفذة)")
             admin_pass = st.text_input("كلمة مرور الأدمن:", type="password", key="admin_pass_key")
             
             if admin_pass == ADMIN_PASSWORD:
-                st.success("تم التحقق من هية الأدمن ✅")
+                st.success("تم التحقق من هويّة الأدمن ✅")
+                
+                # --- إضافة حساب جديد ---
+                st.markdown("###### ➕ إضافة معلم جديد")
                 new_teacher = st.text_input("اسم المعلم الكامل (اللقب):")
                 new_user = st.text_input("اسم المستخدم الجديد للعميل:")
                 new_pass = st.text_input("كلمة المرور للعميل:", type="password", key="new_user_pass_key")
@@ -83,10 +86,36 @@ def login_screen():
                                 "teacher_name": new_teacher.strip()
                             }).execute()
                             st.success(f"تم إنشاء حساب المعلم '{new_teacher}' بنجاح!")
+                            st.rerun()
                         except Exception as e:
-                            st.error("حدث خطأ: اسم المستخدم مُسجل بالفعل أو يوجد مشكلة بالشبكة.")
+                            st.error("حدث خطأ: اسم المستخدم مُسجل بالفعل أو هناك مشكلة بالنظام.")
                     else:
-                        st.warning("يرجى استكمال جميع البيانات المطلوب إدخالها.")
+                        st.warning("يرجى استكمال جميع البيانات المطلوبة.")
+                
+                # --- حذف حساب معلم ---
+                st.markdown("---")
+                st.markdown("###### 🗑️ حذف حساب معلم")
+                res_users = supabase.table("users").select("*").execute()
+                if res_users.data:
+                    df_users = pd.DataFrame(res_users.data)
+                    user_to_delete = st.selectbox("اختر المعلم المراد حذفه:", df_users["teacher_name"].tolist(), key="del_user_select")
+                    
+                    if st.button("❌ حذف المعلم نهائياً", use_container_width=True):
+                        user_id_del = int(df_users[df_users["teacher_name"] == user_to_delete]["id"].values[0])
+                        
+                        # 1. حذف كافة البيانات المرتبطة بهذا المعلم
+                        supabase.table("attendance").delete().eq("user_id", user_id_del).execute()
+                        supabase.table("students").delete().eq("user_id", user_id_del).execute()
+                        supabase.table("groups").delete().eq("user_id", user_id_del).execute()
+                        
+                        # 2. حذف المعلم من جدول users
+                        supabase.table("users").delete().eq("id", user_id_del).execute()
+                        
+                        st.success(f"تم حذف حساب المعلم '{user_to_delete}' وجميع بياناته بنجاح!")
+                        st.rerun()
+                else:
+                    st.info("لا يوجد مستخدمون حالياً.")
+                    
             elif admin_pass:
                 st.error("كلمة مرور الأدمن غير صحيحة.")
 
