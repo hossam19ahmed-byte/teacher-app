@@ -344,11 +344,12 @@ menu_options.extend([
 
 if not is_assistant:
   menu_options.append("6️⃣ تقرير الإيرادات والتحصيلات")
+  menu_options.append("🔐 تغيير كلمة مرور المساعد")
 
 menu = st.sidebar.radio("انتقل إلى:", menu_options)
 
 # ---------------------------------------------------------
-# 1️⃣ تكويد وإدارة المجموعات والطلاب (مُحدث بالكامل للتعديل والحذف)
+# 1️⃣ تكويد وإدارة المجموعات والطلاب
 # ---------------------------------------------------------
 if menu == "1️⃣ تكويد وإدارة المجموعات والطلاب":
   st.header("⚙️ تكويد وإدارة المجموعات والطلاب")
@@ -527,7 +528,9 @@ if menu == "1️⃣ تكويد وإدارة المجموعات والطلاب":
           st.warning(
               "⚠️ تندرج هذه الخاطوة تحت حذف كامل سجل الطالب المالي والأكاديمي."
           )
-          if st.button("❌ حذف الطالب نهائياً", type="primary", use_container_width=True):
+          if st.button(
+              "❌ حذف الطالب نهائياً", type="primary", use_container_width=True
+          ):
             supabase.table("attendance").delete().eq(
                 "student_id", std_id
             ).execute()
@@ -586,9 +589,10 @@ if menu == "1️⃣ تكويد وإدارة المجموعات والطلاب":
             0
         ]
 
-        if st.button("❌ حذف المجموعة", type="primary", use_container_width=True):
+        if st.button(
+            "❌ حذف المجموعة", type="primary", use_container_width=True
+        ):
           g_id = int(grp_data_del["id"])
-          # حذف الحضور ثم الطلاب ثم المجموعة
           supabase.table("attendance").delete().eq("group_id", g_id).execute()
           supabase.table("students").delete().eq("group_id", g_id).execute()
           supabase.table("groups").delete().eq("id", g_id).execute()
@@ -674,7 +678,7 @@ elif menu == "2️⃣ تسجيل الحضور والدرجات":
           st.success("تم حفظ الحضور والدرجات بنجاح!")
 
 # ---------------------------------------------------------
-# 💵 تسجيل التحصيل المالي (خاص بالمعلم)
+# 💵 تسجيل التحصيل المالي
 # ---------------------------------------------------------
 elif menu == "💵 تسجيل التحصيل المالي" and not is_assistant:
   st.header("💵 تسجيل التحصيل المالي للطلاب")
@@ -1036,8 +1040,8 @@ elif menu == "5️⃣ تقرير النتائج الأكاديمية":
 
         if is_assistant:
           footer_text = (
-              f"مع تحيات المساعد / {sender_name}\nتحت إشراف الأستاذ /"
-              f" {main_teacher_name}"
+              f"مع تحيات الأستاذ / {main_teacher_name}\n(بواسطة المساعد /"
+              f" {sender_name})"
           )
         else:
           footer_text = f"مع تحيات الأستاذ / {main_teacher_name}"
@@ -1150,5 +1154,65 @@ elif menu == "6️⃣ تقرير الإيرادات والتحصيلات" and no
       st.info("لا توجد تحصيلات مالية مدفوعة في هذا الشهر.")
   else:
     st.info("لا توجد تحصيلات مالية مدفوعة في هذا الشهر.")
+
+# ---------------------------------------------------------
+# 🔐 تغيير كلمة مرور المساعد (إضافة جديدة)
+# ---------------------------------------------------------
+elif menu == "🔐 تغيير كلمة مرور المساعد" and not is_assistant:
+  st.header("🔐 تغيير كلمة مرور المساعدين")
+  st.markdown("يمكنك من هنا تعديل كلمة المرور الخاصة بأي مساعد تابع لحسابك.")
+
+  # جلب المساعدين التابعين للمعلم الحالي فقط
+  res_assistants = (
+      supabase.table("users")
+      .select("*")
+      .eq("role", "assistant")
+      .eq("parent_teacher_id", current_user_id)
+      .execute()
+  )
+  df_assistants = pd.DataFrame(res_assistants.data or [])
+
+  if not df_assistants.empty:
+    col_sel, col_pass = st.columns(2)
+
+    with col_sel:
+      selected_assistant_name = st.selectbox(
+          "اختر المساعد المراد تغيير كلمة مروره:",
+          df_assistants["teacher_name"].tolist(),
+          key="change_asst_pass_sel",
+      )
+
+    assistant_data = df_assistants[
+        df_assistants["teacher_name"] == selected_assistant_name
+    ].iloc[0]
+    assistant_id = int(assistant_data["id"])
+
+    with col_pass:
+      new_asst_password = st.text_input(
+          f"كلمة المرور الجديدة لـ ({selected_assistant_name}):",
+          type="password",
+          key=f"new_pass_val_{assistant_id}",
+      )
+
+    st.markdown("---")
+    if st.button(
+        "💾 حفظ كلمة المرور الجديدة للمساعد", use_container_width=True
+    ):
+      if new_asst_password.strip():
+        try:
+          supabase.table("users").update(
+              {"password_hash": new_asst_password.strip()}
+          ).eq("id", assistant_id).execute()
+          st.success(
+              f"تم تغيير كلمة المرور للمساعد '{selected_assistant_name}' بنجاح!"
+              " ✅"
+          )
+          st.rerun()
+        except Exception as e:
+          st.error(f"حدث خطأ أثناء تحديث كلمة المرور: {e}")
+      else:
+        st.warning("يرجى إدخال كلمة المرور الجديدة أولاً.")
+  else:
+    st.info("لا يوجد مساعدين مرتبطين بحسابك حالياً.")
 
 render_footer()
