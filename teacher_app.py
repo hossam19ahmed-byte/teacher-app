@@ -1,5 +1,6 @@
 import calendar
 from datetime import date, datetime
+import urllib.parse  # لاستخدامها في تشفير النص لرابط الواتساب
 import pandas as pd
 import streamlit as st
 from supabase import Client, create_client
@@ -18,22 +19,18 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-        /* اتجاه الصفحة بالكامل من اليمين إلى اليسار */
         html, body, [class*="css"] {
             direction: rtl;
             text-align: right;
         }
-        /* القائمة الجانبية */
         section[data-testid="stSidebar"] {
             direction: rtl;
             text-align: right;
         }
-        /* المدخلات والقوائم */
         .stTextInput, .stSelectbox, .stNumberInput, .stDateInput {
             direction: rtl;
             text-align: right;
         }
-        /* تنسيق الهيدر للشعار مع النص */
         .logo-header {
             display: flex;
             align-items: center;
@@ -47,7 +44,6 @@ st.markdown(
             color: #0088cc;
             font-family: Arial, sans-serif;
         }
-        /* تنسيق العنوان الرئيسي */
         .app-title {
             text-align: center;
             font-size: 28px;
@@ -56,7 +52,6 @@ st.markdown(
             margin-bottom: 20px;
             color: #333333;
         }
-        /* شارة طريقة السداد */
         .pay-badge-monthly {
             background-color: #e3f2fd;
             color: #0d47a1;
@@ -73,7 +68,6 @@ st.markdown(
             font-weight: bold;
             font-size: 13px;
         }
-        /* تنسيق الفوتر لأسفل الصفحة */
         .footer-container {
             margin-top: 50px;
             padding-top: 20px;
@@ -91,15 +85,28 @@ st.markdown(
         .footer-container a:hover {
             text-decoration: underline;
         }
+        /* تنسيق زر الواتساب */
+        .whatsapp-btn {
+            background-color: #25D366;
+            color: white !important;
+            padding: 10px 20px;
+            font-weight: bold;
+            border-radius: 8px;
+            text-decoration: none;
+            display: inline-block;
+            margin-top: 10px;
+            text-align: center;
+        }
+        .whatsapp-btn:hover {
+            background-color: #1da851;
+            color: white !important;
+        }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
 
-# ---------------------------------------------------------
-# دالة طباعة الفوتر في نهاية الصفحة
-# ---------------------------------------------------------
 def render_footer():
   st.markdown(
       """
@@ -126,10 +133,7 @@ def init_supabase():
 
 supabase: Client = init_supabase()
 
-# 🔑 كلمة مرور لوحة الإدارة (الأدمن)
 ADMIN_PASSWORD = "admin_tech_builder_2026"
-
-# 🖼️ رابط الصورة من ImgBB
 LOGO_URL = "https://i.ibb.co/Tx4d7kwX/image.png"
 
 # ---------------------------------------------------------
@@ -164,7 +168,6 @@ def login_screen():
 
     tab_login, tab_admin = st.tabs(["دخول المعلمين 👤", "لوحة الإدارة 🛠️"])
 
-    # --- تبويب دخول العملاء ---
     with tab_login:
       st.markdown("##### تسجيل الدخول للحساب")
       username = st.text_input("اسم المستخدم:")
@@ -188,7 +191,6 @@ def login_screen():
         else:
           st.warning("يرجى إدخال اسم المستخدم وكلمة المرور.")
 
-    # --- تبويب لوحة الأدمن ---
     with tab_admin:
       st.markdown("##### إدارة حسابات المعلمين (خاص بالجهة المنفذة)")
       admin_pass = st.text_input(
@@ -198,7 +200,6 @@ def login_screen():
       if admin_pass == ADMIN_PASSWORD:
         st.success("تم التحقق من هويّة الأدمن ✅")
 
-        # إضافة حساب جديد
         st.markdown("###### ➕ إضافة معلم جديد")
         new_teacher = st.text_input("اسم المعلم الكامل (اللقب):")
         new_user = st.text_input("اسم المستخدم الجديد للعميل:")
@@ -221,7 +222,6 @@ def login_screen():
           else:
             st.warning("يرجى استكمال جميع البيانات المطلوبة.")
 
-        # حذف حساب معلم
         st.markdown("---")
         st.markdown("###### 🗑️ حذف حساب معلم")
         res_users = supabase.table("users").select("*").execute()
@@ -261,7 +261,6 @@ def login_screen():
       elif admin_pass:
         st.error("كلمة مرور الأدمن غير صحيحة.")
 
-    # 🟢 تم تعديل الجزء الخاص بالواتس اب ليكون رقم نصي مباشر بدلاً من زرار
     st.markdown(
         """
             <br><hr>
@@ -289,14 +288,13 @@ current_user_id = st.session_state.user["id"]
 teacher_display_name = st.session_state.user["teacher_name"]
 
 # ---------------------------------------------------------
-# 6. القائمة الجانبية وزر الخروج + تغيير كلمة المرور
+# 6. القائمة الجانبية
 # ---------------------------------------------------------
 st.sidebar.title(f"👤 مرحباً: أ/ {teacher_display_name}")
 if st.sidebar.button("تسجيل الخروج 🚪", use_container_width=True):
   st.session_state.user = None
   st.rerun()
 
-# 🔑 قسم تغيير كلمة المرور في القائمة الجانبية
 with st.sidebar.expander("🔑 تغيير كلمة المرور"):
   old_pwd = st.text_input(
       "كلمة المرور الحالية:", type="password", key="change_old_pwd"
@@ -321,8 +319,6 @@ with st.sidebar.expander("🔑 تغيير كلمة المرور"):
           supabase.table("users").update(
               {"password_hash": new_pwd.strip()}
           ).eq("id", current_user_id).execute()
-
-          # تحديث القيمة في الـ Session
           st.session_state.user["password_hash"] = new_pwd.strip()
           st.success("تم تغيير كلمة المرور بنجاح! ✅")
         except Exception as e:
@@ -414,7 +410,6 @@ if menu == "1️⃣ تكويد وإدارة المجموعات والطلاب":
 
   st.markdown("---")
 
-  # قسم الحذف والإدارة
   st.subheader("🗑️ إدارة وحذف البيانات")
   del_tab1, del_tab2 = st.tabs(["حذف طالب", "حذف مجموعة كاملة"])
 
@@ -750,10 +745,10 @@ elif menu == "4️⃣ تقرير موقف الدفع والغياب":
       st.info("لا يوجد طلاب في هذه المجموعة.")
 
 # ---------------------------------------------------------
-# الصفحة الخامسة: تقرير النتائج الأكاديمية (الجدول الشبكي)
+# الصفحة الخامسة: تقرير النتائج الأكاديمية (معدّل ومزود بخاصية إرسال الواتساب)
 # ---------------------------------------------------------
 elif menu == "5️⃣ تقرير النتائج الأكاديمية":
-  st.header("📈 تقرير النتائج الأكاديمية وحساب النسب")
+  st.header("📈 تقرير النتائج الأكاديمية وتقرير ولي الأمر")
 
   res_groups = (
       supabase.table("groups")
@@ -764,7 +759,7 @@ elif menu == "5️⃣ تقرير النتائج الأكاديمية":
   df_groups = pd.DataFrame(res_groups.data)
 
   if not df_groups.empty:
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3, c4 = st.columns([2, 2, 1.5, 1.5])
     with c1:
       group_selected = st.selectbox(
           "اختر المجموعة:", df_groups["group_name"].tolist()
@@ -772,15 +767,33 @@ elif menu == "5️⃣ تقرير النتائج الأكاديمية":
       group_id = int(
           df_groups[df_groups["group_name"] == group_selected]["id"].values[0]
       )
+
+    # جلب الطلاب التابعين للمجموعة لإضافتهم في القائمة
+    res_stds = (
+        supabase.table("students")
+        .select("*")
+        .eq("group_id", group_id)
+        .execute()
+    )
+    df_stds = pd.DataFrame(res_stds.data)
+
     with c2:
-      start_date = st.date_input("من تاريخ:", date(2026, 1, 1), key="res_start")
+      student_options = ["الكل"]
+      if not df_stds.empty:
+        student_options += df_stds["student_name"].tolist()
+      selected_student = st.selectbox("اختر الطالب:", student_options)
+
     with c3:
+      start_date = st.date_input("من تاريخ:", date(2026, 1, 1), key="res_start")
+    with c4:
       end_date = st.date_input("إلى تاريخ:", date.today(), key="res_end")
 
+    # جلب بيانات الحضور والدرجات
     res_att = (
         supabase.table("attendance")
         .select(
-            "session_date, attended, score, max_score, students(student_name)"
+            "session_date, attended, score, max_score, student_id,"
+            " students(student_name, parent_phone)"
         )
         .eq("group_id", group_id)
         .gte("session_date", str(start_date))
@@ -791,33 +804,121 @@ elif menu == "5️⃣ تقرير النتائج الأكاديمية":
     if res_att.data:
       raw_data = []
       for r in res_att.data:
-        std_name = (
-            r["students"]["student_name"] if r.get("students") else "غير معروف"
-        )
+        std_info = r.get("students") or {}
+        std_name = std_info.get("student_name", "غير معروف")
+
+        # الفلترة بحسب الطالب في حال لم يكن الخيار "الكل"
+        if selected_student != "الكل" and std_name != selected_student:
+          continue
+
         sc = r.get("score", 0)
         mx = r.get("max_score", 100)
         pct = (sc / mx * 100) if mx and mx > 0 else 0
 
-        if not r.get("attended"):
-          res_str = "❌ غائب"
-        else:
-          res_str = f"✅ حضر ({sc}/{mx} - {pct:.0f}%)"
+        res_str = (
+            f"✅ حضر ({sc}/{mx} - {pct:.0f}%)" if r.get("attended") else "❌ غائب"
+        )
 
         raw_data.append({
             "اسم الطالب": std_name,
             "تاريخ الحصة": r.get("session_date"),
             "النتيجة": res_str,
+            "حضر": r.get("attended"),
+            "الدرجة": sc,
+            "الدرجة العظمى": mx,
         })
 
-      df_raw = pd.DataFrame(raw_data)
-      pivot_df = df_raw.pivot_table(
-          index="اسم الطالب",
-          columns="تاريخ الحصة",
-          values="النتيجة",
-          aggfunc="first",
-      ).fillna("غير مسجل")
+      if raw_data:
+        df_raw = pd.DataFrame(raw_data)
 
-      st.dataframe(pivot_df, use_container_width=True)
+        # 🟢 إذا كان العرض لجميع الطلاب (جدول شبكي مفصل)
+        if selected_student == "الكل":
+          pivot_df = df_raw.pivot_table(
+              index="اسم الطالب",
+              columns="تاريخ الحصة",
+              values="النتيجة",
+              aggfunc="first",
+          ).fillna("غير مسجل")
+          st.dataframe(pivot_df, use_container_width=True)
+
+        # 🟢 إذا تم اختيار طالب محدد (تفاصيل الطالب + زر الواتساب)
+        else:
+          st.markdown("---")
+          std_row = df_stds[df_stds["student_name"] == selected_student].iloc[0]
+          parent_phone = str(std_row.get("parent_phone", "")).strip()
+
+          col_info1, col_info2 = st.columns(2)
+          with col_info1:
+            st.subheader(f"👤 تقرير الطالب: {selected_student}")
+            st.write(
+                f"📱 **تليفون ولي الأمر:** {parent_phone if parent_phone else 'غير مسجل'}"
+            )
+
+          # حساب الإحصائيات العامة للطالب
+          total_sessions = len(df_raw)
+          attended_count = sum(df_raw["حضر"])
+          absent_count = total_sessions - attended_count
+          total_score = df_raw[df_raw["حضر"]]["الدرجة"].sum()
+          total_max = df_raw[df_raw["حضر"]]["الدرجة العظمى"].sum()
+          overall_pct = (
+              (total_score / total_max * 100) if total_max > 0 else 0
+          )
+
+          with col_info2:
+            st.metric("عدد الحصص", f"{total_sessions}")
+            st.metric("عدد مرات الغياب", f"{absent_count}")
+            st.metric("المعدل الأكاديمي", f"{overall_pct:.1f}%")
+
+          st.write("#### 📋 تفاصيل الحصص خلال الفترة:")
+          st.dataframe(
+              df_raw[["تاريخ الحصة", "النتيجة"]], use_container_width=True
+          )
+
+          # 📲 تجهيز رسالة الواتساب وزر الإرسال
+          if parent_phone:
+            # تنظيف وتنسيق الرقم ليقبل كود الدولة (افتراضياً مصر +20 إذا لم يذكر)
+            formatted_phone = parent_phone.replace(" ", "").replace("-", "")
+            if formatted_phone.startswith("01"):
+              formatted_phone = "20" + formatted_phone[1:]
+            elif formatted_phone.startswith("+"):
+              formatted_phone = formatted_phone.replace("+", "")
+
+            # تجهيز نص التقرير للرسالة
+            msg_text = (
+                f"السلام عليكم ورحمة الله وبركاته،\n"
+                f"تقرير متابعة الطالب: *{selected_student}*\n"
+                f"الفترة من: {start_date} إلى {end_date}\n\n"
+                f"📌 *ملخص الأداء:*\n"
+                f"• إجمالي الحصص: {total_sessions}\n"
+                f"• عدد مرات الحضور: {attended_count}\n"
+                f"• عدد مرات الغياب: {absent_count}\n"
+                f"• المستوى الأكاديمي العام: {overall_pct:.1f}%\n\n"
+                f"مع تحيات الأستاذ: {teacher_display_name}"
+            )
+
+            encoded_msg = urllib.parse.quote(msg_text)
+            wa_url = (
+                f"https://wa.me/{formatted_phone}?text={encoded_msg}"
+            )
+
+            st.markdown(
+                f"""
+                <center>
+                    <a href="{wa_url}" target="_blank" class="whatsapp-btn">
+                        📲 إرسال هذا التقرير عبر WhatsApp لولي الأمر
+                    </a>
+                </center>
+                """,
+                unsafe_allow_html=True,
+            )
+          else:
+            st.warning(
+                "⚠️ لم يتم تسجيل رقم هاتف ولي الأمر لهذا الطالب في شاشة"
+                " التكويد."
+            )
+
+      else:
+        st.info("لا توجد سجلات لهذا الطالب في الفترة المحسوبة.")
     else:
       st.info("لا توجد حصص مسجلة لهذه المجموعة في الفترة المحددة.")
   else:
