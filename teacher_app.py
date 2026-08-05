@@ -298,7 +298,6 @@ user_role = st.session_state.user.get("role", "teacher")
 if user_role == "assistant":
   current_user_id = st.session_state.user.get("parent_teacher_id")
   is_assistant = True
-  # جلب اسم المعلم الرئيسي للمساعد
   parent_res = (
       supabase.table("users")
       .select("teacher_name")
@@ -334,7 +333,6 @@ menu_options = [
     "2️⃣ تسجيل الحضور والدرجات",
 ]
 
-# إضافة صفحة التحصيل للمعلم فقط
 if not is_assistant:
   menu_options.append("💵 تسجيل التحصيل المالي")
 
@@ -350,26 +348,79 @@ if not is_assistant:
 menu = st.sidebar.radio("انتقل إلى:", menu_options)
 
 # ---------------------------------------------------------
-# 1️⃣ تكويد وإدارة المجموعات والطلاب
+# 1️⃣ تكويد وإدارة المجموعات والطلاب (مُحدث بالكامل للتعديل والحذف)
 # ---------------------------------------------------------
 if menu == "1️⃣ تكويد وإدارة المجموعات والطلاب":
   st.header("⚙️ تكويد وإدارة المجموعات والطلاب")
 
-  col1, col2 = st.columns(2)
-  with col1:
-    st.subheader("➕ إضافة مجموعة جديدة")
-    new_group = st.text_input("اسم المجموعة:")
-    if st.button("حفظ المجموعة"):
-      if new_group.strip():
-        supabase.table("groups").insert({
-            "user_id": current_user_id,
-            "group_name": new_group.strip(),
-        }).execute()
-        st.success(f"تمت إضافة المجموعة '{new_group}' بنجاح!")
-        st.rerun()
+  tab_add, tab_edit_std, tab_edit_grp = st.tabs([
+      "➕ إضافة جديدة",
+      "✏️ تعديل / حذف طالب",
+      "📁 إدارة المجموعات (تعديل/حذف)",
+  ])
 
-  with col2:
-    st.subheader("➕ إضافة طالب جديد")
+  # --- تبويب 1: إضافة طالب ومجموعة ---
+  with tab_add:
+    col1, col2 = st.columns(2)
+    with col1:
+      st.subheader("➕ إضافة مجموعة جديدة")
+      new_group = st.text_input("اسم المجموعة:")
+      if st.button("حفظ المجموعة", use_container_width=True):
+        if new_group.strip():
+          supabase.table("groups").insert({
+              "user_id": current_user_id,
+              "group_name": new_group.strip(),
+          }).execute()
+          st.success(f"تمت إضافة المجموعة '{new_group}' بنجاح!")
+          st.rerun()
+        else:
+          st.warning("يرجى كتابة اسم المجموعة.")
+
+    with col2:
+      st.subheader("➕ إضافة طالب جديد")
+      res_groups = (
+          supabase.table("groups")
+          .select("*")
+          .eq("user_id", current_user_id)
+          .execute()
+      )
+      df_groups = pd.DataFrame(res_groups.data or [])
+
+      if not df_groups.empty:
+        group_selected = st.selectbox(
+            "اختر المجموعة:", df_groups["group_name"].tolist(), key="add_std_grp"
+        )
+        student_name = st.text_input("اسم الطالب:")
+        payment_type = st.selectbox(
+            "طريقة السداد:", ["بالحصة", "شهري"], key="add_std_pay"
+        )
+        student_phone = st.text_input("تليفون الطالب:")
+        parent_phone = st.text_input("تليفون ولي الأمر:")
+
+        if st.button("حفظ الطالب", use_container_width=True):
+          if student_name.strip():
+            group_id = int(
+                df_groups[df_groups["group_name"] == group_selected][
+                    "id"
+                ].values[0]
+            )
+            supabase.table("students").insert({
+                "user_id": current_user_id,
+                "group_id": group_id,
+                "student_name": student_name.strip(),
+                "payment_type": payment_type,
+                "student_phone": student_phone.strip(),
+                "parent_phone": parent_phone.strip(),
+            }).execute()
+            st.success(f"تمت إضافة الطالب '{student_name}' بنجاح!")
+            st.rerun()
+          else:
+            st.warning("يرجى إدخال اسم الطالب.")
+      else:
+        st.info("قم بإضافة مجموعة أولاً لتتمكن من إضافة طلاب.")
+
+  # --- تبويب 2: تعديل وحذف الطلاب ---
+  with tab_edit_std:
     res_groups = (
         supabase.table("groups")
         .select("*")
@@ -379,30 +430,169 @@ if menu == "1️⃣ تكويد وإدارة المجموعات والطلاب":
     df_groups = pd.DataFrame(res_groups.data or [])
 
     if not df_groups.empty:
-      group_selected = st.selectbox(
-          "اختر المجموعة:", df_groups["group_name"].tolist()
-      )
-      student_name = st.text_input("اسم الطالب:")
-      payment_type = st.selectbox("طريقة السداد:", ["بالحصة", "شهري"])
-      student_phone = st.text_input("تليفون الطالب:")
-      parent_phone = st.text_input("تليفون ولي الأمر:")
+      col_g, col_s = st.columns(2)
+      with col_g:
+        filter_grp = st.selectbox(
+            "اختر المجموعة لتصفية الطلاب:",
+            df_groups["group_name"].tolist(),
+            key="edit_filter_grp",
+        )
+        selected_grp_id = int(
+            df_groups[df_groups["group_name"] == filter_grp]["id"].values[0]
+        )
 
-      if st.button("حفظ الطالب"):
-        if student_name.strip():
-          group_id = int(
-              df_groups[df_groups["group_name"] == group_selected]["id"].values[
-                  0
-              ]
+      res_stds = (
+          supabase.table("students")
+          .select("*")
+          .eq("group_id", selected_grp_id)
+          .execute()
+      )
+      df_stds = pd.DataFrame(res_stds.data or [])
+
+      if not df_stds.empty:
+        with col_s:
+          selected_std_name = st.selectbox(
+              "اختر الطالب المراد تعديله / حذفه:",
+              df_stds["student_name"].tolist(),
+              key="edit_std_select",
           )
-          supabase.table("students").insert({
-              "user_id": current_user_id,
-              "group_id": group_id,
-              "student_name": student_name.strip(),
-              "payment_type": payment_type,
-              "student_phone": student_phone.strip(),
-              "parent_phone": parent_phone.strip(),
-          }).execute()
-          st.success(f"تمت إضافة الطالب '{student_name}' بنجاح!")
+
+        std_data = df_stds[
+            df_stds["student_name"] == selected_std_name
+        ].iloc[0]
+        std_id = int(std_data["id"])
+
+        st.markdown("---")
+        col_edit, col_del = st.columns([2, 1])
+
+        with col_edit:
+          st.subheader(f"✏️ تعديل بيانات الطالب: {selected_std_name}")
+          up_name = st.text_input(
+              "اسم الطالب المعدل:",
+              value=std_data["student_name"],
+              key=f"up_name_{std_id}",
+          )
+
+          curr_grp_idx = int(
+              df_groups[df_groups["id"] == std_data["group_id"]].index[0]
+          )
+          up_grp_name = st.selectbox(
+              "نقل إلى مجموعة أخرى:",
+              df_groups["group_name"].tolist(),
+              index=curr_grp_idx,
+              key=f"up_grp_{std_id}",
+          )
+          up_grp_id = int(
+              df_groups[df_groups["group_name"] == up_grp_name]["id"].values[0]
+          )
+
+          pay_opts = ["بالحصة", "شهري"]
+          curr_pay_idx = (
+              pay_opts.index(std_data["payment_type"])
+              if std_data["payment_type"] in pay_opts
+              else 0
+          )
+          up_pay_type = st.selectbox(
+              "طريقة السداد:",
+              pay_opts,
+              index=curr_pay_idx,
+              key=f"up_pay_{std_id}",
+          )
+
+          up_phone = st.text_input(
+              "تليفون الطالب:",
+              value=std_data.get("student_phone") or "",
+              key=f"up_p_{std_id}",
+          )
+          up_parent_phone = st.text_input(
+              "تليفون ولي الأمر:",
+              value=std_data.get("parent_phone") or "",
+              key=f"up_pp_{std_id}",
+          )
+
+          if st.button("💾 حفظ تعديلات الطالب", use_container_width=True):
+            if up_name.strip():
+              supabase.table("students").update({
+                  "student_name": up_name.strip(),
+                  "group_id": up_grp_id,
+                  "payment_type": up_pay_type,
+                  "student_phone": up_phone.strip(),
+                  "parent_phone": up_parent_phone.strip(),
+              }).eq("id", std_id).execute()
+              st.success(f"تم تعديل بيانات الطالب '{up_name}' بنجاح! ✅")
+              st.rerun()
+
+        with col_del:
+          st.subheader("🗑️ حذف الطالب")
+          st.warning(
+              "⚠️ تندرج هذه الخاطوة تحت حذف كامل سجل الطالب المالي والأكاديمي."
+          )
+          if st.button("❌ حذف الطالب نهائياً", type="primary", use_container_width=True):
+            supabase.table("attendance").delete().eq(
+                "student_id", std_id
+            ).execute()
+            supabase.table("students").delete().eq("id", std_id).execute()
+            st.success(f"تم حذف الطالب '{selected_std_name}' بنجاح.")
+            st.rerun()
+      else:
+        st.info("لا يوجد طلاب مسجلين في هذه المجموعة.")
+    else:
+      st.info("لا توجد مجموعات مسجلة.")
+
+  # --- تبويب 3: تعديل وحذف المجموعات ---
+  with tab_edit_grp:
+    res_groups = (
+        supabase.table("groups")
+        .select("*")
+        .eq("user_id", current_user_id)
+        .execute()
+    )
+    df_groups = pd.DataFrame(res_groups.data or [])
+
+    if not df_groups.empty:
+      c_g1, c_g2 = st.columns(2)
+      with c_g1:
+        st.subheader("✏️ تعديل اسم المجموعة")
+        sel_grp_rename = st.selectbox(
+            "اختر المجموعة المراد تعديل اسمها:",
+            df_groups["group_name"].tolist(),
+            key="rename_grp_sel",
+        )
+        grp_data_rename = df_groups[
+            df_groups["group_name"] == sel_grp_rename
+        ].iloc[0]
+        new_grp_name_input = st.text_input(
+            "الاسم الجديد للمجموعة:",
+            value=grp_data_rename["group_name"],
+            key="rename_grp_val",
+        )
+
+        if st.button("💾 حفظ الاسم الجديد للمجموعة", use_container_width=True):
+          if new_grp_name_input.strip():
+            supabase.table("groups").update(
+                {"group_name": new_grp_name_input.strip()}
+            ).eq("id", int(grp_data_rename["id"])).execute()
+            st.success("تم تغيير اسم المجموعة بنجاح! ✅")
+            st.rerun()
+
+      with c_g2:
+        st.subheader("🗑️ حذف مجموعة")
+        sel_grp_del = st.selectbox(
+            "اختر المجموعة المراد حذفها:",
+            df_groups["group_name"].tolist(),
+            key="del_grp_sel",
+        )
+        grp_data_del = df_groups[df_groups["group_name"] == sel_grp_del].iloc[
+            0
+        ]
+
+        if st.button("❌ حذف المجموعة", type="primary", use_container_width=True):
+          g_id = int(grp_data_del["id"])
+          # حذف الحضور ثم الطلاب ثم المجموعة
+          supabase.table("attendance").delete().eq("group_id", g_id).execute()
+          supabase.table("students").delete().eq("group_id", g_id).execute()
+          supabase.table("groups").delete().eq("id", g_id).execute()
+          st.success(f"تم حذف مجموعة '{sel_grp_del}' بكافة بياناتها بنجاح!")
           st.rerun()
 
 # ---------------------------------------------------------
@@ -484,7 +674,7 @@ elif menu == "2️⃣ تسجيل الحضور والدرجات":
           st.success("تم حفظ الحضور والدرجات بنجاح!")
 
 # ---------------------------------------------------------
-# 💵 تسجيل التحصيل المالي (صفحة جديدة خاصة بالمعلم)
+# 💵 تسجيل التحصيل المالي (خاص بالمعلم)
 # ---------------------------------------------------------
 elif menu == "💵 تسجيل التحصيل المالي" and not is_assistant:
   st.header("💵 تسجيل التحصيل المالي للطلاب")
@@ -528,7 +718,6 @@ elif menu == "💵 تسجيل التحصيل المالي" and not is_assistant:
           f" **{payment_date}**"
       )
 
-      # جلب سجلات اليوم إن وجدت لتعبئتها مسبقاً
       res_att_today = (
           supabase.table("attendance")
           .select("*")
@@ -591,14 +780,12 @@ elif menu == "💵 تسجيل التحصيل المالي" and not is_assistant:
         ):
           for rec in pay_records:
             if rec["existing_id"]:
-              # تحديث السجل الموجود
               supabase.table("attendance").update({
                   "attended": rec["attended"],
                   "paid_amount": rec["paid_amount"],
                   "paid": 1 if rec["paid_amount"] > 0 else 0,
               }).eq("id", rec["existing_id"]).execute()
             else:
-              # إنشاء سجل جديد بالتحصيل
               supabase.table("attendance").insert({
                   "user_id": current_user_id,
                   "student_id": rec["student_id"],
@@ -738,7 +925,7 @@ elif menu == "4️⃣ تقرير موقف الدفع والغياب":
       st.dataframe(pd.DataFrame(report_list), use_container_width=True)
 
 # ---------------------------------------------------------
-# 5️⃣ تقرير النتائج الأكاديمية (محدث بتقرير كلي في النهاية)
+# 5️⃣ تقرير النتائج الأكاديمية
 # ---------------------------------------------------------
 elif menu == "5️⃣ تقرير النتائج الأكاديمية":
   st.header("📈 تقرير النتائج الأكاديمية وتعديل نتائج ولي الأمر")
@@ -808,7 +995,6 @@ elif menu == "5️⃣ تقرير النتائج الأكاديمية":
           attended = r.get("attended")
           session_dt = r.get("session_date")
 
-          # صياغة السطر الخاص بكل حصة للرسالة
           if attended:
             status_line = (
                 f"- بتاريخ {session_dt} : حضر ✅ (الدرجة: {sc} من {mx})"
@@ -818,7 +1004,6 @@ elif menu == "5️⃣ تقرير النتائج الأكاديمية":
 
           session_details_text.append(status_line)
 
-          # عرض الجدول في الشاشة
           col_date, col_res = st.columns([3, 7])
           with col_date:
             st.markdown(
@@ -849,9 +1034,6 @@ elif menu == "5️⃣ تقرير النتائج الأكاديمية":
               unsafe_allow_html=True,
           )
 
-        # ---------------------------------------------------------
-        # بناء ترويل وتذييل الرسالة الجماعية والشاملة
-        # ---------------------------------------------------------
         if is_assistant:
           footer_text = (
               f"مع تحيات المساعد / {sender_name}\nتحت إشراف الأستاذ /"
