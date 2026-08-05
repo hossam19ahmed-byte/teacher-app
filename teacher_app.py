@@ -132,7 +132,7 @@ def login_screen():
       if admin_pass == ADMIN_PASSWORD:
         st.success("تم التحقق من هويّة الأدمن ✅")
 
-        # عرض كشف بجميع الحسابات المسجلة وكلمات المرور الخاصة بها
+        # عرض كشف بجميع الحسابات المسجلة
         st.markdown("###### 🔑 قائمة الحسابات وكلمات المرور المسجلة:")
         res_all_users = supabase.table("users").select("*").execute()
         if res_all_users.data:
@@ -156,7 +156,73 @@ def login_screen():
         st.markdown("---")
 
         # ---------------------------------------------------------
-        # ميزة جديدة: تغيير كلمة المرور لأي حساب بواسطة الأدمن
+        # ميزة جديدة: تعديل الاسم الظاهر واسم المستخدم لأي حساب
+        # ---------------------------------------------------------
+        st.markdown(
+            "###### ✏️ تعديل بيانات حساب (الاسم الظاهر / اسم المستخدم)"
+        )
+        if res_all_users.data:
+          df_all_users = pd.DataFrame(res_all_users.data)
+          selected_user_to_edit = st.selectbox(
+              "اختر الحساب المراد تعديل بياناته:",
+              df_all_users["teacher_name"].tolist(),
+              key="admin_edit_user_select",
+          )
+
+          user_data = df_all_users[
+              df_all_users["teacher_name"] == selected_user_to_edit
+          ].iloc[0]
+
+          edit_teacher_name = st.text_input(
+              "الاسم الظاهر / الكرتي الجديد:",
+              value=user_data.get("teacher_name", ""),
+              key="edit_t_name",
+          )
+          edit_username = st.text_input(
+              "اسم المستخدم الجديد للدخول:",
+              value=user_data.get("username", ""),
+              key="edit_u_name",
+          )
+
+          if st.button("💾 حفظ البيانات المعدلة", use_container_width=True):
+            if edit_teacher_name.strip() and edit_username.strip():
+              target_user_id = int(user_data["id"])
+
+              # تحقق إذا كان اسم المستخدم الجديد مستخدماً بالفعل في حساب آخر
+              if edit_username.strip() != user_data["username"]:
+                chk = (
+                    supabase.table("users")
+                    .select("id")
+                    .eq("username", edit_username.strip())
+                    .execute()
+                )
+                if chk.data:
+                  st.error(
+                      f"⚠️ اسم المستخدم '{edit_username.strip()}' مأخوذ بالفعل"
+                      " لحساب آخر!"
+                  )
+                  st.stop()
+
+              try:
+                supabase.table("users").update({
+                    "teacher_name": edit_teacher_name.strip(),
+                    "username": edit_username.strip(),
+                }).eq("id", target_user_id).execute()
+                st.success(
+                    f"تم تعديل بيانات الحساب '{edit_teacher_name}' بنجاح! ✅"
+                )
+                st.rerun()
+              except Exception as e:
+                st.error(f"حدث خطأ أثناء التحديث: {e}")
+            else:
+              st.warning("يرجى ملء جميع الحقول المطلوب تعديلها.")
+        else:
+          st.info("لا توجد حسابات لتعديلها.")
+
+        st.markdown("---")
+
+        # ---------------------------------------------------------
+        # تغيير كلمة المرور لأي حساب بواسطة الأدمن
         # ---------------------------------------------------------
         st.markdown("###### 🔑 تغيير كلمة المرور لأي حساب")
         if res_all_users.data:
@@ -192,8 +258,6 @@ def login_screen():
                 st.error(f"حدث خطأ أثناء التحديث: {e}")
             else:
               st.warning("يرجى إدخال كلمة المرور الجديدة.")
-        else:
-          st.info("لا توجد حسابات لتغيير كلماتها.")
 
         st.markdown("---")
         st.markdown("###### ➕ إضافة حساب جديد")
@@ -310,7 +374,7 @@ def login_screen():
         """
             <br><hr>
             <center>
-                <p style='font-size: 15px; margin-bottom: 8px;'>للحصول على حساب جديد أو تجديد الاشتراك، يرجى التواصل مع <b>(Tech Builder)</b></p>
+                <p style='font-size: 15px; margin-bottom: 8px;'>ل للحصول على حساب جديد أو تجديد الاشتراك، يرجى التواصل مع <b>(Tech Builder)</b></p>
                 <p style='font-size: 17px; font-weight: bold; color: #0088cc; direction: ltr; margin: 0;'>
                     💬 WhatsApp: <span style='color: #25D366;'>+20 121 850 5995</span>
                 </p>
