@@ -132,6 +132,70 @@ def login_screen():
       if admin_pass == ADMIN_PASSWORD:
         st.success("تم التحقق من هويّة الأدمن ✅")
 
+        # عرض كشف بجميع الحسابات المسجلة وكلمات المرور الخاصة بها
+        st.markdown("###### 🔑 قائمة الحسابات وكلمات المرور المسجلة:")
+        res_all_users = supabase.table("users").select("*").execute()
+        if res_all_users.data:
+          users_list = []
+          for u in res_all_users.data:
+            role_str = (
+                "معلم رئيسي 👑"
+                if u.get("role") == "teacher"
+                else "مساعد معلم 🛠️"
+            )
+            users_list.append({
+                "الاسم الظاهر": u.get("teacher_name", "-"),
+                "اسم المستخدم": u.get("username", "-"),
+                "كلمة المرور 🔑": u.get("password_hash", "-"),
+                "نوع الحساب": role_str,
+            })
+          st.dataframe(pd.DataFrame(users_list), use_container_width=True)
+        else:
+          st.info("لا توجد حسابات مسجلة حالياً.")
+
+        st.markdown("---")
+
+        # ---------------------------------------------------------
+        # ميزة جديدة: تغيير كلمة المرور لأي حساب بواسطة الأدمن
+        # ---------------------------------------------------------
+        st.markdown("###### 🔑 تغيير كلمة المرور لأي حساب")
+        if res_all_users.data:
+          df_all_users = pd.DataFrame(res_all_users.data)
+          selected_user_to_reset = st.selectbox(
+              "اختر الحساب المراد تغيير كلمة المرور له:",
+              df_all_users["teacher_name"].tolist(),
+              key="admin_reset_user_select",
+          )
+          admin_new_pass = st.text_input(
+              "كلمة المرور الجديدة للحساب:",
+              type="password",
+              key="admin_new_pass_input",
+          )
+
+          if st.button("🔄 تحديث كلمة المرور", use_container_width=True):
+            if admin_new_pass.strip():
+              target_user_row = df_all_users[
+                  df_all_users["teacher_name"] == selected_user_to_reset
+              ].iloc[0]
+              target_user_id = int(target_user_row["id"])
+
+              try:
+                supabase.table("users").update(
+                    {"password_hash": admin_new_pass.strip()}
+                ).eq("id", target_user_id).execute()
+                st.success(
+                    f"تم تغيير كلمة المرور للحساب '{selected_user_to_reset}'"
+                    " بنجاح! ✅"
+                )
+                st.rerun()
+              except Exception as e:
+                st.error(f"حدث خطأ أثناء التحديث: {e}")
+            else:
+              st.warning("يرجى إدخال كلمة المرور الجديدة.")
+        else:
+          st.info("لا توجد حسابات لتغيير كلماتها.")
+
+        st.markdown("---")
         st.markdown("###### ➕ إضافة حساب جديد")
         account_type = st.radio(
             "نوع الحساب المراد إنشاؤه:",
@@ -173,7 +237,6 @@ def login_screen():
             if account_type == "مساعد للمعلم" and not parent_teacher_id:
               st.error("يرجى اختيار معلم رئيسي للمساعد.")
             else:
-              # فحص هل اسم المستخدم متواجد مسبقاً
               existing_user = (
                   supabase.table("users")
                   .select("id")
@@ -699,24 +762,20 @@ elif menu == "5️⃣ تقرير النتائج الأكاديمية":
         attended = r.get("attended")
         session_dt = r.get("session_date")
 
-        # ترتيب الأعمدة محاذاة أفقية
         col_name, col_date, col_res, col_wa = st.columns([2.5, 2, 4, 2])
 
-        # 1. اسم الطالب (يمين)
         with col_name:
           st.markdown(
               f"<div style='padding-top:8px;'>👤 <b>{std_name}</b></div>",
               unsafe_allow_html=True,
           )
 
-        # 2. التاريخ (وسط)
         with col_date:
           st.markdown(
               f"<div style='padding-top:8px;'>📅 {session_dt}</div>",
               unsafe_allow_html=True,
           )
 
-        # 3. نتيجة الحصة ببطاقة ملونة (وسط)
         with col_res:
           if attended:
             st.markdown(
@@ -737,7 +796,6 @@ elif menu == "5️⃣ تقرير النتائج الأكاديمية":
                 unsafe_allow_html=True,
             )
 
-        # 4. زر الواتساب (يسار بنهاية السطر)
         with col_wa:
           if parent_phone:
             formatted_phone = parent_phone.replace(" ", "").replace("-", "")
