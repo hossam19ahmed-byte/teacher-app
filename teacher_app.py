@@ -23,12 +23,10 @@ st.markdown(
         .stTextInput, .stSelectbox, .stNumberInput, .stDateInput { direction: rtl; text-align: right; }
         .logo-header { display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 10px; }
         .logo-text { font-size: 32px; font-weight: bold; color: #0088cc; font-family: Arial, sans-serif; }
-        .app-title { text-align: center; font-size: 28px; font-weight: bold; margin-top: 5px; margin-bottom: 20px; color: #333333; }
-        .pay-badge-monthly { background-color: #e3f2fd; color: #0d47a1; padding: 4px 10px; border-radius: 6px; font-weight: bold; font-size: 13px; }
-        .pay-badge-session { background-color: #e8f5e9; color: #1b5e20; padding: 4px 10px; border-radius: 6px; font-weight: bold; font-size: 13px; }
-        .footer-container { margin-top: 50px; padding-top: 20px; border-top: 1px solid #e6e6e6; text-align: center; font-size: 14px; color: #666666; direction: ltr; }
+        .app-title { text-align: center; font-size: 28px; font-weight: bold; margin-top: 5px; margin-bottom: 20px; color: #ffffff; }
+        .footer-container { margin-top: 50px; padding-top: 20px; border-top: 1px solid #333333; text-align: center; font-size: 14px; color: #888888; direction: ltr; }
         .footer-container a { color: #0088cc; text-decoration: none; font-weight: bold; }
-        .whatsapp-btn { background-color: #25D366; color: white !important; padding: 5px 12px; font-weight: bold; border-radius: 6px; text-decoration: none; display: inline-block; text-align: center; font-size: 13px; }
+        .whatsapp-btn { background-color: #25D366; color: white !important; padding: 6px 14px; font-weight: bold; border-radius: 6px; text-decoration: none; display: inline-block; text-align: center; font-size: 13px; }
         .whatsapp-btn:hover { background-color: #1da851; color: white !important; }
     </style>
     """,
@@ -175,21 +173,35 @@ def login_screen():
             if account_type == "مساعد للمعلم" and not parent_teacher_id:
               st.error("يرجى اختيار معلم رئيسي للمساعد.")
             else:
-              try:
-                role_val = (
-                    "teacher" if account_type == "معلم رئيسي" else "assistant"
+              # فحص هل اسم المستخدم متواجد مسبقاً
+              existing_user = (
+                  supabase.table("users")
+                  .select("id")
+                  .eq("username", new_user.strip())
+                  .execute()
+              )
+
+              if existing_user.data:
+                st.error(
+                    f"⚠️ اسم المستخدم '{new_user.strip()}' مأخوذ بالفعل! يرجى"
+                    " اختيار اسم مستخدم آخر."
                 )
-                supabase.table("users").insert({
-                    "username": new_user.strip(),
-                    "password_hash": new_pass.strip(),
-                    "teacher_name": new_teacher.strip(),
-                    "role": role_val,
-                    "parent_teacher_id": parent_teacher_id,
-                }).execute()
-                st.success(f"تم إنشاء حساب '{new_teacher}' بنجاح!")
-                st.rerun()
-              except Exception as e:
-                st.error(f"حدث خطأ أثناء الإنشاء: {e}")
+              else:
+                try:
+                  role_val = (
+                      "teacher" if account_type == "معلم رئيسي" else "assistant"
+                  )
+                  supabase.table("users").insert({
+                      "username": new_user.strip(),
+                      "password_hash": new_pass.strip(),
+                      "teacher_name": new_teacher.strip(),
+                      "role": role_val,
+                      "parent_teacher_id": parent_teacher_id,
+                  }).execute()
+                  st.success(f"تم إنشاء حساب '{new_teacher}' بنجاح! ✅")
+                  st.rerun()
+                except Exception as e:
+                  st.error(f"حدث خطأ أثناء الإنشاء: {e}")
           else:
             st.warning("يرجى استكمال جميع البيانات المطلوبة.")
 
@@ -256,7 +268,6 @@ if not st.session_state.user:
 # ---------------------------------------------------------
 user_role = st.session_state.user.get("role", "teacher")
 
-# ربط المساعد بالمعلم الأساسي
 if user_role == "assistant":
   current_user_id = st.session_state.user.get("parent_teacher_id")
   is_assistant = True
@@ -267,7 +278,7 @@ else:
 teacher_display_name = st.session_state.user["teacher_name"]
 
 # ---------------------------------------------------------
-# 6. القائمة الجانبية وقوائم الصلاحيات
+# 6. القائمة الجانبية
 # ---------------------------------------------------------
 role_label = "مساعد معلم 🛠️" if is_assistant else "معلم 👤"
 st.sidebar.title(f"{role_label}: {teacher_display_name}")
@@ -310,7 +321,6 @@ menu_options = [
     "5️⃣ تقرير النتائج الأكاديمية",
 ]
 
-# إخفاء تقرير الإيرادات والتحصيلات في حالة المساعد
 if not is_assistant:
   menu_options.append("6️⃣ تقرير الإيرادات والتحصيلات")
 
@@ -434,7 +444,6 @@ elif menu == "2️⃣ تسجيل الحضور والدرجات والدفع":
         for idx, row in students_in_group.iterrows():
           st.markdown(f"**👤 الطالب: {row['student_name']}**")
 
-          # إخفاء إدخال الدفع إذا كان حساب مساعد
           if is_assistant:
             c1, c2, c3, c4 = st.columns([2, 2, 2, 2])
             paid_amount = 0.0
@@ -618,10 +627,10 @@ elif menu == "4️⃣ تقرير موقف الدفع والغياب":
       st.dataframe(pd.DataFrame(report_list), use_container_width=True)
 
 # ---------------------------------------------------------
-# الصفحة الخامسة: تقرير النتائج الأكاديمية (مع زر واتساب لكل سطر)
+# الصفحة الخامسة: تقرير النتائج الأكاديمية
 # ---------------------------------------------------------
 elif menu == "5️⃣ تقرير النتائج الأكاديمية":
-  st.header("📈 تقرير النتائج الأكاديمية وتقرير ولي الأمر")
+  st.header("📈 تقرير النتائج الأكاديمية وتعديل نتائج ولي الأمر")
 
   res_groups = (
       supabase.table("groups")
@@ -676,7 +685,6 @@ elif menu == "5️⃣ تقرير النتائج الأكاديمية":
       st.markdown("---")
       st.subheader("📋 سجل النتائج والحصص:")
 
-      # التنسيق للعرض بالتفصيل مع تابة واتساب بجانب كل سطر
       for r in res_att.data:
         std_info = r.get("students") or {}
         std_name = std_info.get("student_name", "غير معروف")
@@ -691,18 +699,45 @@ elif menu == "5️⃣ تقرير النتائج الأكاديمية":
         attended = r.get("attended")
         session_dt = r.get("session_date")
 
-        col_name, col_date, col_res, col_wa = st.columns([2.5, 2, 2.5, 2])
+        # ترتيب الأعمدة محاذاة أفقية
+        col_name, col_date, col_res, col_wa = st.columns([2.5, 2, 4, 2])
 
+        # 1. اسم الطالب (يمين)
         with col_name:
-          st.write(f"👤 **{std_name}**")
+          st.markdown(
+              f"<div style='padding-top:8px;'>👤 <b>{std_name}</b></div>",
+              unsafe_allow_html=True,
+          )
+
+        # 2. التاريخ (وسط)
         with col_date:
-          st.write(f"📅 {session_dt}")
+          st.markdown(
+              f"<div style='padding-top:8px;'>📅 {session_dt}</div>",
+              unsafe_allow_html=True,
+          )
+
+        # 3. نتيجة الحصة ببطاقة ملونة (وسط)
         with col_res:
           if attended:
-            st.success(f"حضر ✅ ({sc}/{mx} - {pct:.0f}%)")
+            st.markdown(
+                f"""
+                            <div style='background-color: #1e4620; color: #85e89d; border-radius: 8px; padding: 6px 12px; text-align: center; font-weight: bold;'>
+                                حضر ✅ ({sc}/{mx} - %{pct:.0f})
+                            </div>
+                            """,
+                unsafe_allow_html=True,
+            )
           else:
-            st.error("غائب ❌")
+            st.markdown(
+                """
+                            <div style='background-color: #4a1e1e; color: #ff8585; border-radius: 8px; padding: 6px 12px; text-align: center; font-weight: bold;'>
+                                غائب ❌
+                            </div>
+                            """,
+                unsafe_allow_html=True,
+            )
 
+        # 4. زر الواتساب (يسار بنهاية السطر)
         with col_wa:
           if parent_phone:
             formatted_phone = parent_phone.replace(" ", "").replace("-", "")
@@ -712,7 +747,7 @@ elif menu == "5️⃣ تقرير النتائج الأكاديمية":
               formatted_phone = formatted_phone.replace("+", "")
 
             status_txt = (
-                f"حضر وحصل على درجة ({sc} من {mx}) بنسبة {pct:.0f}%"
+                f"حضر وحصل على درجة ({sc} من {mx}) بنسبة %{pct:.0f}"
                 if attended
                 else "غائب عن الحصة"
             )
@@ -726,18 +761,29 @@ elif menu == "5️⃣ تقرير النتائج الأكاديمية":
             wa_url = f"https://wa.me/{formatted_phone}?text={encoded_msg}"
 
             st.markdown(
-                f'<a href="{wa_url}" target="_blank" class="whatsapp-btn">📲'
-                " إرسال إشعار الحصة</a>",
+                f"""
+                            <div style='text-align: left;'>
+                                <a href="{wa_url}" target="_blank" class="whatsapp-btn">📲 إرسال إشعار الحصة</a>
+                            </div>
+                            """,
                 unsafe_allow_html=True,
             )
           else:
-            st.caption("بدون رقم ولي أمر")
-        st.markdown("<hr style='margin: 5px 0;'>", unsafe_allow_html=True)
+            st.markdown(
+                "<div style='text-align: left; color:#888; padding-top:8px;'><small>بدون"
+                " رقم</small></div>",
+                unsafe_allow_html=True,
+            )
+
+        st.markdown(
+            "<hr style='margin: 8px 0; border-color: #333;'>",
+            unsafe_allow_html=True,
+        )
     else:
       st.info("لا توجد حصص مسجلة لهذه المجموعة.")
 
 # ---------------------------------------------------------
-# الصفحة السادسة: تقرير الإيرادات والتحصيلات (للمعلم فقط)
+# الصفحة السادسة: تقرير الإيرادات والتحصيلات
 # ---------------------------------------------------------
 elif menu == "6️⃣ تقرير الإيرادات والتحصيلات" and not is_assistant:
   st.header("💰 تقرير الإيرادات الشهرية حسب المجموعات")
