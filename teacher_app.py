@@ -156,7 +156,7 @@ def login_screen():
         st.markdown("---")
 
         # ---------------------------------------------------------
-        # ميزة جديدة: تعديل الاسم الظاهر واسم المستخدم لأي حساب
+        # تم إصلاح التحديث اللحظي لخانة التعديل
         # ---------------------------------------------------------
         st.markdown(
             "###### ✏️ تعديل بيانات حساب (الاسم الظاهر / اسم المستخدم)"
@@ -173,15 +173,18 @@ def login_screen():
               df_all_users["teacher_name"] == selected_user_to_edit
           ].iloc[0]
 
+          # استخدام key ديناميكي يعتمد على id الحساب لتحديث المدخلات فوراً عند التغيير
+          user_unique_key = str(user_data["id"])
+
           edit_teacher_name = st.text_input(
               "الاسم الظاهر / الكرتي الجديد:",
               value=user_data.get("teacher_name", ""),
-              key="edit_t_name",
+              key=f"edit_t_name_{user_unique_key}",
           )
           edit_username = st.text_input(
               "اسم المستخدم الجديد للدخول:",
               value=user_data.get("username", ""),
-              key="edit_u_name",
+              key=f"edit_u_name_{user_unique_key}",
           )
 
           if st.button("💾 حفظ البيانات المعدلة", use_container_width=True):
@@ -232,18 +235,21 @@ def login_screen():
               df_all_users["teacher_name"].tolist(),
               key="admin_reset_user_select",
           )
+
+          target_reset_row = df_all_users[
+              df_all_users["teacher_name"] == selected_user_to_reset
+          ].iloc[0]
+          reset_unique_key = str(target_reset_row["id"])
+
           admin_new_pass = st.text_input(
               "كلمة المرور الجديدة للحساب:",
               type="password",
-              key="admin_new_pass_input",
+              key=f"admin_new_pass_input_{reset_unique_key}",
           )
 
           if st.button("🔄 تحديث كلمة المرور", use_container_width=True):
             if admin_new_pass.strip():
-              target_user_row = df_all_users[
-                  df_all_users["teacher_name"] == selected_user_to_reset
-              ].iloc[0]
-              target_user_id = int(target_user_row["id"])
+              target_user_id = int(target_reset_row["id"])
 
               try:
                 supabase.table("users").update(
@@ -374,7 +380,7 @@ def login_screen():
         """
             <br><hr>
             <center>
-                <p style='font-size: 15px; margin-bottom: 8px;'>ل للحصول على حساب جديد أو تجديد الاشتراك، يرجى التواصل مع <b>(Tech Builder)</b></p>
+                <p style='font-size: 15px; margin-bottom: 8px;'>للحصول على حساب جديد أو تجديد الاشتراك، يرجى التواصل مع <b>(Tech Builder)</b></p>
                 <p style='font-size: 17px; font-weight: bold; color: #0088cc; direction: ltr; margin: 0;'>
                     💬 WhatsApp: <span style='color: #25D366;'>+20 121 850 5995</span>
                 </p>
