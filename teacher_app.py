@@ -598,12 +598,12 @@ if menu == "1️⃣ تكويد وإدارة المجموعات والطلاب":
                     st.rerun()
 
 # ---------------------------------------------------------
-# 2️⃣ تسجيل الحضور والدرجات (مع إمكانية الحذف)
+# 2️⃣ تسجيل الحضور والدرجات (تعديل وحذف سجل الحضور)
 # ---------------------------------------------------------
 elif menu == "2️⃣ تسجيل الحضور والدرجات":
     st.header("📝 تسجيل الحضور والدرجات")
 
-    tab_rec, tab_del_att = st.tabs(["📝 تسجيل حضور جديد", "🗑️ حذف / تعديل سجل حضور"])
+    tab_rec, tab_del_att = st.tabs(["📝 تسجيل حضور جديد", "✏️ تعديل / 🗑️ حذف سجل حضور"])
 
     res_groups = (
         supabase.table("groups")
@@ -684,7 +684,7 @@ elif menu == "2️⃣ تسجيل الحضور والدرجات":
             st.info("لا توجد مجموعات مسجلة.")
 
     with tab_del_att:
-        st.subheader("🗑️ حذف سجل حضور طالب خاطئ")
+        st.subheader("✏️ تعديل أو 🗑️ حذف سجل حضور طالب")
         if not df_groups.empty:
             col_del1, col_del2 = st.columns(2)
             with col_del1:
@@ -713,22 +713,60 @@ elif menu == "2️⃣ تسجيل الحضور والدرجات":
                     supabase.table("attendance")
                     .select("*")
                     .eq("student_id", del_std_id)
+                    .order("session_date", desc=True)
                     .execute()
                 )
                 df_att_records = pd.DataFrame(res_att_records.data or [])
 
                 if not df_att_records.empty:
-                    st.markdown("###### السجلات المسجلة للطالب:")
+                    st.markdown("###### السجلات المسجلة للطالب (يمكنك تعديل الحضور/الدرجات أو الحذف):")
                     for idx, att_row in df_att_records.iterrows():
-                        status_str = "حضر" if att_row.get("attended") else "غائب"
-                        c_info, c_btn = st.columns([3, 1])
-                        with c_info:
-                            st.write(f"📅 التاريخ: {att_row['session_date']} | الحضور: {status_str} | الدرجة: {att_row.get('score', 0)} / {att_row.get('max_score', 100)}")
-                        with c_btn:
-                            if st.button("❌ حذف هذا السجل", key=f"btn_del_att_{att_row['id']}", type="primary"):
-                                supabase.table("attendance").delete().eq("id", att_row["id"]).execute()
-                                st.success("تم حذف سجل الحضور بنجاح! ✅")
-                                st.rerun()
+                        att_rec_id = att_row["id"]
+                        curr_attended = bool(att_row.get("attended", True))
+                        curr_score = float(att_row.get("score", 0.0))
+                        curr_max = float(att_row.get("max_score", 100.0))
+
+                        with st.expander(f"📅 تاريخ الحصة: {att_row['session_date']} — ({'حضر ✅' if curr_attended else 'غائب ❌'})"):
+                            c_m1, c_m2, c_m3 = st.columns([2, 2, 2])
+                            with c_m1:
+                                new_status = st.radio(
+                                    "حالة الحضور:",
+                                    ["حضر", "غائب"],
+                                    index=0 if curr_attended else 1,
+                                    key=f"edit_att_status_{att_rec_id}"
+                                )
+                            with c_m2:
+                                new_score = st.number_input(
+                                    "الدرجة:",
+                                    min_value=0.0,
+                                    max_value=500.0,
+                                    value=curr_score,
+                                    key=f"edit_att_score_{att_rec_id}"
+                                )
+                            with c_m3:
+                                new_max = st.number_input(
+                                    "الدرجة العظمى:",
+                                    min_value=1.0,
+                                    max_value=500.0,
+                                    value=curr_max,
+                                    key=f"edit_att_max_{att_rec_id}"
+                                )
+
+                            btn_col1, btn_col2 = st.columns(2)
+                            with btn_col1:
+                                if st.button("💾 حفظ التعديل", key=f"btn_save_att_{att_rec_id}", use_container_width=True):
+                                    supabase.table("attendance").update({
+                                        "attended": True if new_status == "حضر" else False,
+                                        "score": new_score,
+                                        "max_score": new_max
+                                    }).eq("id", att_rec_id).execute()
+                                    st.success("تم تعديل السجل بنجاح! ✅")
+                                    st.rerun()
+                            with btn_col2:
+                                if st.button("❌ حذف هذا السجل", key=f"btn_del_att_{att_rec_id}", type="primary", use_container_width=True):
+                                    supabase.table("attendance").delete().eq("id", att_rec_id).execute()
+                                    st.success("تم حذف سجل الحضور بنجاح! ✅")
+                                    st.rerun()
                 else:
                     st.info("لا توجد سجلات حضور مسجلة لهذا الطالب.")
             else:
