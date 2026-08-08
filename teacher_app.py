@@ -272,7 +272,7 @@ def login_screen():
                                         "password_hash": new_pass.strip(),
                                         "teacher_name": new_teacher.strip(),
                                         "role": role_val,
-                                        "parent_teacher_id": parent_teacher_id,
+                                        "parent_teacher_id": parent_parent_teacher_id if account_type == "مساعد للمعلم" else None,
                                     }).execute()
                                     st.success(f"تم إنشاء حساب '{new_teacher}' بنجاح! ✅")
                                     st.rerun()
@@ -315,7 +315,7 @@ else:
 teacher_display_name = st.session_state.user["teacher_name"]
 
 # ---------------------------------------------------------
-# 6. القائمة الجانبية (تم تحسين وترتيب خيارات القائمة)
+# 6. القائمة الجانبية
 # ---------------------------------------------------------
 role_label = "مساعد معلم 🛠️" if is_assistant else "معلم 👤"
 st.sidebar.title(f"{role_label}: {teacher_display_name}")
@@ -597,10 +597,12 @@ if menu == "1️⃣ تكويد وإدارة المجموعات والطلاب":
                     st.rerun()
 
 # ---------------------------------------------------------
-# 2️⃣ تسجيل الحضور والدرجات
+# 2️⃣ تسجيل الحضور والدرجات (مع إمكانية الحذف)
 # ---------------------------------------------------------
 elif menu == "2️⃣ تسجيل الحضور والدرجات":
     st.header("📝 تسجيل الحضور والدرجات")
+
+    tab_rec, tab_del_att = st.tabs(["📝 تسجيل حضور جديد", "🗑️ حذف / تعديل سجل حضور"])
 
     res_groups = (
         supabase.table("groups")
@@ -610,69 +612,126 @@ elif menu == "2️⃣ تسجيل الحضور والدرجات":
     )
     df_groups = pd.DataFrame(res_groups.data or [])
 
-    if not df_groups.empty:
-        group_selected = st.selectbox(
-            "اختر المجموعة:", df_groups["group_name"].tolist()
-        )
-        group_id = int(
-            df_groups[df_groups["group_name"] == group_selected]["id"].values[0]
-        )
-        session_date = st.date_input("تاريخ الحصة:", date.today())
+    with tab_rec:
+        if not df_groups.empty:
+            group_selected = st.selectbox(
+                "اختر المجموعة:", df_groups["group_name"].tolist(), key="rec_att_grp"
+            )
+            group_id = int(
+                df_groups[df_groups["group_name"] == group_selected]["id"].values[0]
+            )
+            session_date = st.date_input("تاريخ الحصة:", date.today(), key="rec_att_date")
 
-        res_stds = (
-            supabase.table("students").select("*").eq("group_id", group_id).execute()
-        )
-        students_in_group = pd.DataFrame(res_stds.data or [])
+            res_stds = (
+                supabase.table("students").select("*").eq("group_id", group_id).execute()
+            )
+            students_in_group = pd.DataFrame(res_stds.data or [])
 
-        if not students_in_group.empty:
-            with st.form("attendance_form"):
-                records = []
-                for idx, row in students_in_group.iterrows():
-                    st.markdown(f"**👤 الطالب: {row['student_name']}**")
+            if not students_in_group.empty:
+                with st.form("attendance_form"):
+                    records = []
+                    for idx, row in students_in_group.iterrows():
+                        st.markdown(f"**👤 الطالب: {row['student_name']}**")
 
-                    c1, c2, c3, c4 = st.columns([2, 2, 2, 2])
-                    with c1:
-                        status = st.radio(
-                            "الحضور:", ["حضر", "غائب"], key=f"status_{row['id']}"
-                        )
-                    with c2:
-                        score = st.number_input(
-                            "الدرجة:",
-                            min_value=0.0,
-                            max_value=500.0,
-                            value=0.0,
-                            key=f"score_{row['id']}",
-                        )
-                    with c3:
-                        max_score = st.number_input(
-                            "العظمى:",
-                            min_value=1.0,
-                            max_value=500.0,
-                            value=100.0,
-                            key=f"max_{row['id']}",
-                        )
-                    with c4:
-                        pct_calc = (score / max_score * 100) if max_score > 0 else 0
-                        st.markdown(f"**النسبة:** {pct_calc:.1f}%")
+                        c1, c2, c3, c4 = st.columns([2, 2, 2, 2])
+                        with c1:
+                            status = st.radio(
+                                "الحضور:", ["حضر", "غائب"], key=f"status_{row['id']}"
+                            )
+                        with c2:
+                            score = st.number_input(
+                                "الدرجة:",
+                                min_value=0.0,
+                                max_value=500.0,
+                                value=0.0,
+                                key=f"score_{row['id']}",
+                            )
+                        with c3:
+                            max_score = st.number_input(
+                                "العظمى:",
+                                min_value=1.0,
+                                max_value=500.0,
+                                value=100.0,
+                                key=f"max_{row['id']}",
+                            )
+                        with c4:
+                            pct_calc = (score / max_score * 100) if max_score > 0 else 0
+                            st.markdown(f"**النسبة:** {pct_calc:.1f}%")
 
-                    st.markdown("---")
+                        st.markdown("---")
 
-                    records.append({
-                        "user_id": current_user_id,
-                        "student_id": int(row["id"]),
-                        "group_id": group_id,
-                        "session_date": str(session_date),
-                        "attended": True if status == "حضر" else False,
-                        "score": score,
-                        "max_score": max_score,
-                        "paid": 0,
-                        "paid_amount": 0.0,
-                    })
+                        records.append({
+                            "user_id": current_user_id,
+                            "student_id": int(row["id"]),
+                            "group_id": group_id,
+                            "session_date": str(session_date),
+                            "attended": True if status == "حضر" else False,
+                            "score": score,
+                            "max_score": max_score,
+                            "paid": 0,
+                            "paid_amount": 0.0,
+                        })
 
-                submit = st.form_submit_button("💾 حفظ بيانات الحصة والدرجات")
-                if submit:
-                    supabase.table("attendance").insert(records).execute()
-                    st.success("تم حفظ الحضور والدرجات بنجاح!")
+                    submit = st.form_submit_button("💾 حفظ بيانات الحصة والدرجات")
+                    if submit:
+                        supabase.table("attendance").insert(records).execute()
+                        st.success("تم حفظ الحضور والدرجات بنجاح!")
+                        st.rerun()
+            else:
+                st.info("لا يوجد طلاب مسجلين في هذه المجموعة.")
+        else:
+            st.info("لا توجد مجموعات مسجلة.")
+
+    with tab_del_att:
+        st.subheader("🗑️ حذف سجل حضور طالب خاطئ")
+        if not df_groups.empty:
+            col_del1, col_del2 = st.columns(2)
+            with col_del1:
+                del_grp_selected = st.selectbox(
+                    "اختر المجموعة:", df_groups["group_name"].tolist(), key="del_att_grp"
+                )
+                del_group_id = int(
+                    df_groups[df_groups["group_name"] == del_grp_selected]["id"].values[0]
+                )
+            
+            res_stds_del = (
+                supabase.table("students").select("*").eq("group_id", del_group_id).execute()
+            )
+            df_stds_del = pd.DataFrame(res_stds_del.data or [])
+
+            if not df_stds_del.empty:
+                with col_del2:
+                    del_std_selected = st.selectbox(
+                        "اختر الطالب:", df_stds_del["student_name"].tolist(), key="del_att_std"
+                    )
+                    del_std_id = int(
+                        df_stds_del[df_stds_del["student_name"] == del_std_selected]["id"].values[0]
+                    )
+
+                res_att_records = (
+                    supabase.table("attendance")
+                    .select("*")
+                    .eq("student_id", del_std_id)
+                    .execute()
+                )
+                df_att_records = pd.DataFrame(res_att_records.data or [])
+
+                if not df_att_records.empty:
+                    st.markdown("###### السجلات المسجلة للطالب:")
+                    for idx, att_row in df_att_records.iterrows():
+                        status_str = "حضر" if att_row.get("attended") else "غائب"
+                        c_info, c_btn = st.columns([3, 1])
+                        with c_info:
+                            st.write(f"📅 التاريخ: {att_row['session_date']} | الحضور: {status_str} | الدرجة: {att_row.get('score', 0)} / {att_row.get('max_score', 100)}")
+                        with c_btn:
+                            if st.button("❌ حذف هذا السجل", key=f"btn_del_att_{att_row['id']}", type="primary"):
+                                supabase.table("attendance").delete().eq("id", att_row["id"]).execute()
+                                st.success("تم حذف سجل الحضور بنجاح! ✅")
+                                st.rerun()
+                else:
+                    st.info("لا توجد سجلات حضور مسجلة لهذا الطالب.")
+            else:
+                st.info("لا يوجد طلاب مسجلين في هذه المجموعة.")
 
 # ---------------------------------------------------------
 # 💵 تسجيل التحصيل المالي
@@ -734,228 +793,466 @@ elif menu == "💵 تسجيل التحصيل المالي" and not is_assistant:
                 pay_records = []
                 for idx, std in df_stds.iterrows():
                     s_id = int(std["id"])
-                    existing_rec = att_dict.get(s_id, {})
+                    st.markdown(f"**👤 الطالب: {std['student_name']}** (طريقة السداد: {std.get('payment_type', 'بالحصة')})")
 
-                    c_name, c_att, c_paid = st.columns([3, 2, 3])
-
-                    with c_name:
-                        st.markdown(
-                            f"<div style='padding-top: 10px;'><b>👤 {std['student_name']}</b></div>",
-                            unsafe_allow_html=True,
-                        )
-
-                    with c_att:
-                        is_att_val = existing_rec.get("attended", True)
-                        att_status = st.selectbox(
-                            "الحضور:",
-                            ["حضر", "غائب"],
-                            index=0 if is_att_val else 1,
-                            key=f"pay_att_{s_id}",
-                        )
-
-                    with c_paid:
-                        init_paid = float(existing_rec.get("paid_amount", 0.0))
-                        paid_val = st.number_input(
-                            "المبلغ المحصل (جنيه):",
+                    curr_att = att_dict.get(s_id, {})
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        p_amount = st.number_input(
+                            "المبلغ المدفوع:",
                             min_value=0.0,
-                            value=init_paid,
-                            step=10.0,
-                            key=f"pay_val_{s_id}",
+                            value=float(curr_att.get("paid_amount", 0.0)),
+                            key=f"pay_amt_{s_id}",
+                        )
+                    with c2:
+                        p_status = st.checkbox(
+                            "تم الدفع",
+                            value=bool(curr_att.get("paid", 0)),
+                            key=f"pay_chk_{s_id}",
                         )
 
                     pay_records.append({
                         "student_id": s_id,
-                        "existing_id": existing_rec.get("id"),
-                        "attended": True if att_status == "حضر" else False,
-                        "paid_amount": paid_val,
-                        "score": existing_rec.get("score", 0.0),
-                        "max_score": existing_rec.get("max_score", 100.0),
+                        "amount": p_amount,
+                        "paid": 1 if p_status else 0,
                     })
-                    st.markdown(
-                        "<hr style='margin: 4px 0; border-color: #222;'>",
-                        unsafe_allow_html=True,
-                    )
+                    st.markdown("---")
 
-                if st.form_submit_button(
-                    "💾 حفظ وتأكيد التحصيلات المالية", use_container_width=True
-                ):
-                    for rec in pay_records:
-                        if rec["existing_id"]:
+                btn_pay_submit = st.form_submit_button("💾 حفظ التحصيل المالي")
+                if btn_pay_submit:
+                    for pr in pay_records:
+                        chk_exist = (
+                            supabase.table("attendance")
+                            .select("id")
+                            .eq("student_id", pr["student_id"])
+                            .eq("session_date", str(payment_date))
+                            .execute()
+                        )
+                        if chk_exist.data:
                             supabase.table("attendance").update({
-                                "attended": rec["attended"],
-                                "paid_amount": rec["paid_amount"],
-                            }).eq("id", rec["existing_id"]).execute()
+                                "paid": pr["paid"],
+                                "paid_amount": pr["amount"],
+                            }).eq("id", chk_exist.data[0]["id"]).execute()
                         else:
                             supabase.table("attendance").insert({
                                 "user_id": current_user_id,
-                                "student_id": rec["student_id"],
+                                "student_id": pr["student_id"],
                                 "group_id": group_id,
                                 "session_date": str(payment_date),
-                                "attended": rec["attended"],
-                                "paid_amount": rec["paid_amount"],
-                                "score": rec["score"],
-                                "max_score": rec["max_score"],
+                                "attended": False,
+                                "score": 0,
+                                "max_score": 100,
+                                "paid": pr["paid"],
+                                "paid_amount": pr["amount"],
                             }).execute()
-                    st.success("تم تحديث وحفظ التحصيلات المالية بنجاح! 💵")
+
+                    st.success("تم حفظ البيانات المالية بنجاح! ✅")
                     st.rerun()
 
 # ---------------------------------------------------------
 # 3️⃣ كشف حساب طالب / مجموعة
 # ---------------------------------------------------------
 elif menu == "3️⃣ كشف حساب طالب / مجموعة":
-    st.header("📄 كشف حساب طالب / مجموعة")
-    res_groups = supabase.table("groups").select("*").eq("user_id", current_user_id).execute()
+    st.header("📊 كشف حساب طالب / مجموعة")
+
+    res_groups = (
+        supabase.table("groups")
+        .select("*")
+        .eq("user_id", current_user_id)
+        .execute()
+    )
     df_groups = pd.DataFrame(res_groups.data or [])
 
     if not df_groups.empty:
-        grp_sel = st.selectbox("اختر المجموعة:", df_groups["group_name"].tolist(), key="stmt_grp")
-        grp_id = int(df_groups[df_groups["group_name"] == grp_sel]["id"].values[0])
+        col1, col2 = st.columns(2)
+        with col1:
+            grp_sel = st.selectbox(
+                "اختر المجموعة:", df_groups["group_name"].tolist(), key="stmt_grp"
+            )
+            g_id = int(df_groups[df_groups["group_name"] == grp_sel]["id"].values[0])
 
-        res_stds = supabase.table("students").select("*").eq("group_id", grp_id).execute()
+        res_stds = (
+            supabase.table("students").select("*").eq("group_id", g_id).execute()
+        )
         df_stds = pd.DataFrame(res_stds.data or [])
 
         if not df_stds.empty:
-            std_sel = st.selectbox("اختر الطالب:", ["عرض كافة المجموعة"] + df_stds["student_name"].tolist())
+            with col2:
+                std_options = ["جميع طلاب المجموعة"] + df_stds["student_name"].tolist()
+                std_sel = st.selectbox("اختر الطالب:", std_options, key="stmt_std")
 
-            if std_sel == "عرض كافة المجموعة":
-                res_att = supabase.table("attendance").select("*, students(student_name)").eq("group_id", grp_id).execute()
+            if std_sel == "جميع طلاب المجموعة":
+                res_att = (
+                    supabase.table("attendance")
+                    .select("*, students(student_name)")
+                    .eq("group_id", g_id)
+                    .execute()
+                )
             else:
-                std_id = int(df_stds[df_stds["student_name"] == std_sel]["id"].values[0])
-                res_att = supabase.table("attendance").select("*, students(student_name)").eq("student_id", std_id).execute()
+                s_id = int(
+                    df_stds[df_stds["student_name"] == std_sel]["id"].values[0]
+                )
+                res_att = (
+                    supabase.table("attendance")
+                    .select("*, students(student_name)")
+                    .eq("student_id", s_id)
+                    .execute()
+                )
 
             df_att = pd.DataFrame(res_att.data or [])
             if not df_att.empty:
-                df_att["اسم الطالب"] = df_att["students"].apply(lambda x: x.get("student_name") if isinstance(x, dict) else "-")
-                df_att["الحالة"] = df_att["attended"].apply(lambda x: "حضر ✅" if x else "غائب ❌")
-                df_att = df_att.rename(columns={
-                    "session_date": "تاريخ الحصة",
-                    "score": "الدرجة",
-                    "max_score": "الدرجة العظمى",
-                    "paid_amount": "المبلغ المدفوع"
-                })
-                st.dataframe(df_att[["اسم الطالب", "تاريخ الحصة", "الحالة", "الدرجة", "الدرجة العظمى", "المبلغ المدفوع"]], use_container_width=True)
+                df_att["اسم الطالب"] = df_att["students"].apply(
+                    lambda x: x["student_name"] if isinstance(x, dict) else "-"
+                )
+                df_att["الحضور"] = df_att["attended"].apply(
+                    lambda x: "حضر ✅" if x else "غائب ❌"
+                )
+                df_att["حالة الدفع"] = df_att["paid"].apply(
+                    lambda x: "تم الدفع 💵" if x else "لم يدفع ⚠️"
+                )
+
+                disp_df = df_att[[
+                    "session_date",
+                    "اسم الطالب",
+                    "الحضور",
+                    "score",
+                    "max_score",
+                    "حالة الدفع",
+                    "paid_amount",
+                ]].copy()
+                disp_df.columns = [
+                    "تاريخ الحصة",
+                    "اسم الطالب",
+                    "حالة الحضور",
+                    "الدرجة",
+                    "الدرجة العظمى",
+                    "حالة الدفع",
+                    "المبلغ المدفوع",
+                ]
+
+                st.dataframe(disp_df, use_container_width=True)
             else:
-                st.info("لا توجد سجلات متاحة لهذه التصفية.")
+                st.info("لا توجد سجلات هامة لعرضها.")
         else:
             st.info("لا يوجد طلاب مسجلين في هذه المجموعة.")
+    else:
+        st.info("لا توجد مجموعات مسجلة.")
 
 # ---------------------------------------------------------
 # 4️⃣ تقرير موقف الدفع والغياب
 # ---------------------------------------------------------
 elif menu == "4️⃣ تقرير موقف الدفع والغياب":
-    st.header("📊 تقرير موقف الدفع والغياب")
-    res_groups = supabase.table("groups").select("*").eq("user_id", current_user_id).execute()
+    st.header("📈 تقرير موقف الدفع والغياب")
+
+    res_groups = (
+        supabase.table("groups")
+        .select("*")
+        .eq("user_id", current_user_id)
+        .execute()
+    )
     df_groups = pd.DataFrame(res_groups.data or [])
 
     if not df_groups.empty:
-        grp_sel = st.selectbox("اختر المجموعة:", df_groups["group_name"].tolist(), key="abs_grp")
-        grp_id = int(df_groups[df_groups["group_name"] == grp_sel]["id"].values[0])
+        grp_sel = st.selectbox(
+            "اختر المجموعة:", df_groups["group_name"].tolist(), key="rep_grp"
+        )
+        g_id = int(df_groups[df_groups["group_name"] == grp_sel]["id"].values[0])
 
-        res_att = supabase.table("attendance").select("*, students(student_name)").eq("group_id", grp_id).execute()
-        df_att = pd.DataFrame(res_att.data or [])
+        res_stds = (
+            supabase.table("students").select("*").eq("group_id", g_id).execute()
+        )
+        df_stds = pd.DataFrame(res_stds.data or [])
 
-        if not df_att.empty:
-            df_att["student_name"] = df_att["students"].apply(lambda x: x.get("student_name") if isinstance(x, dict) else "-")
-            summary = df_att.groupby("student_name").agg(
-                مرات_الحضور=("attended", lambda x: sum(x == True)),
-                مرات_الغياب=("attended", lambda x: sum(x == False)),
-                إجمالي_المدفوع=("paid_amount", "sum")
-            ).reset_index()
+        if not df_stds.empty:
+            summary_list = []
+            for idx, std in df_stds.iterrows():
+                s_id = int(std["id"])
+                res_att = (
+                    supabase.table("attendance")
+                    .select("*")
+                    .eq("student_id", s_id)
+                    .execute()
+                )
+                att_data = res_att.data or []
 
-            st.dataframe(summary, use_container_width=True)
+                total_sessions = len(att_data)
+                absent_count = sum(1 for a in att_data if not a.get("attended"))
+                unpaid_count = sum(1 for a in att_data if not a.get("paid"))
+                total_paid = sum(a.get("paid_amount", 0.0) for a in att_data)
+
+                summary_list.append({
+                    "اسم الطالب": std["student_name"],
+                    "طريقة السداد": std.get("payment_type", "بالحصة"),
+                    "إجمالي الحصص المسجلة": total_sessions,
+                    "عدد مرات الغياب": absent_count,
+                    "حصص غير مدفوعة": unpaid_count,
+                    "إجمالي المحصل": total_paid,
+                    "تليفون ولي الأمر": std.get("parent_phone", "-"),
+                })
+
+            st.dataframe(pd.DataFrame(summary_list), use_container_width=True)
         else:
-            st.info("لا توجد سجلات حضور للمجموعة المحددة.")
+            st.info("لا يوجد طلاب مسجلين في هذه المجموعة.")
+    else:
+        st.info("لا توجد مجموعات مسجلة.")
 
 # ---------------------------------------------------------
-# 5️⃣ تقرير النتائج الأكاديمية
+# 5️⃣ تقرير النتائج الأكاديمية (مع إرسال الواتساب المطلوب)
 # ---------------------------------------------------------
 elif menu == "5️⃣ تقرير النتائج الأكاديمية":
     st.header("🏆 تقرير النتائج الأكاديمية")
-    res_groups = supabase.table("groups").select("*").eq("user_id", current_user_id).execute()
+
+    res_groups = (
+        supabase.table("groups")
+        .select("*")
+        .eq("user_id", current_user_id)
+        .execute()
+    )
     df_groups = pd.DataFrame(res_groups.data or [])
 
     if not df_groups.empty:
-        grp_sel = st.selectbox("اختر المجموعة:", df_groups["group_name"].tolist(), key="acad_grp")
-        grp_id = int(df_groups[df_groups["group_name"] == grp_sel]["id"].values[0])
+        col_f1, col_f2, col_f3, col_f4 = st.columns(4)
+        with col_f1:
+            selected_grp_name = st.selectbox(
+                "المجموعة:", df_groups["group_name"].tolist(), key="acad_grp"
+            )
+            selected_grp_id = int(
+                df_groups[df_groups["group_name"] == selected_grp_name]["id"].values[0]
+            )
 
-        res_att = supabase.table("attendance").select("*, students(student_name)").eq("group_id", grp_id).execute()
-        df_att = pd.DataFrame(res_att.data or [])
+        res_stds = (
+            supabase.table("students")
+            .select("*")
+            .eq("group_id", selected_grp_id)
+            .execute()
+        )
+        df_stds = pd.DataFrame(res_stds.data or [])
 
-        if not df_att.empty:
-            df_att["student_name"] = df_att["students"].apply(lambda x: x.get("student_name") if isinstance(x, dict) else "-")
-            summary = df_att.groupby("student_name").agg(
-                مجموع_الدرجات=("score", "sum"),
-                المجموع_الأقصى=("max_score", "sum")
-            ).reset_index()
+        if not df_stds.empty:
+            with col_f2:
+                selected_std_name = st.selectbox(
+                    "اسم الطالب:", df_stds["student_name"].tolist(), key="acad_std"
+                )
+                selected_std_data = df_stds[
+                    df_stds["student_name"] == selected_std_name
+                ].iloc[0]
+                selected_std_id = int(selected_std_data["id"])
 
-            summary["النسبة المئوية %"] = (summary["مجموع_الدرجات"] / summary["المجموع_الأقصى"] * 100).round(1)
-            summary = summary.sort_values(by="النسبة المئوية %", ascending=False)
+            with col_f3:
+                start_date = st.date_input("من تاريخ:", date(date.today().year, date.today().month, 1), key="acad_sdate")
+            with col_f4:
+                end_date = st.date_input("إلى تاريخ:", date.today(), key="acad_edate")
 
-            st.dataframe(summary, use_container_width=True)
+            res_acad = (
+                supabase.table("attendance")
+                .select("*")
+                .eq("student_id", selected_std_id)
+                .gte("session_date", str(start_date))
+                .lte("session_date", str(end_date))
+                .order("session_date", desc=False)
+                .execute()
+            )
+            df_acad = pd.DataFrame(res_acad.data or [])
+
+            if not df_acad.empty:
+                df_acad["حالة الحضور"] = df_acad["attended"].apply(
+                    lambda x: "حضر ✅" if x else "غائب ❌"
+                )
+                df_acad["النسبة المئوية"] = (
+                    df_acad["score"] / df_acad["max_score"] * 100
+                ).round(1).astype(str) + "%"
+
+                disp_acad = df_acad[[
+                    "session_date",
+                    "حالة الحضور",
+                    "score",
+                    "max_score",
+                    "النسبة المئوية",
+                ]].copy()
+                disp_acad.columns = [
+                    "تاريخ الحصة",
+                    "حالة الحضور",
+                    "الدرجة",
+                    "الدرجة العظمى",
+                    "النسبة المئوية",
+                ]
+
+                st.markdown("---")
+                st.markdown(f"##### 📊 نتائج الطالب: **{selected_std_name}** للفتـرة من **{start_date}** إلى **{end_date}**")
+                st.dataframe(disp_acad, use_container_width=True)
+
+                # صياغة نص الواتساب حسب الطلب تماماً
+                sessions_text_list = []
+                for _, row in df_acad.iterrows():
+                    att_status = "حضر" if row["attended"] else "غائب"
+                    if row["attended"]:
+                        score_str = f"ودرجة الامتحان: {row['score']} من {row['max_score']}"
+                    else:
+                        score_str = ""
+                    sessions_text_list.append(f"- حصة يوم {row['session_date']}: {att_status} {score_str}".strip())
+
+                sessions_text = "\n".join(sessions_text_list)
+
+                if is_assistant:
+                    footer_sig = f"مع تحيات المعلم / {main_teacher_name}\nبواسطة المساعد / {sender_name}"
+                else:
+                    footer_sig = f"مع تحيات استاذ / {main_teacher_name}"
+
+                whatsapp_message = (
+                    f"السلام عليكم\n"
+                    f"ولي امر الطالب / {selected_std_name}\n\n"
+                    f"إليك تقرير الحضور والنتائج الأكاديمية للترة من {start_date} إلى {end_date}:\n\n"
+                    f"{sessions_text}\n\n"
+                    f"{footer_sig}"
+                )
+
+                parent_phone = selected_std_data.get("parent_phone", "").strip()
+
+                st.markdown("---")
+                if parent_phone:
+                    encoded_msg = urllib.parse.quote(whatsapp_message)
+                    whatsapp_url = f"https://wa.me/{parent_phone}?text={encoded_msg}"
+                    st.markdown(
+                        f'''
+                        <a href="{whatsapp_url}" target="_blank">
+                            <button style="background-color: #25D366; color: white; border: none; padding: 12px 24px; font-size: 16px; border-radius: 8px; cursor: pointer; width: 100%; font-weight: bold;">
+                                📲 إرسال التقرير عبر واتساب ولي الأمر ({parent_phone})
+                            </button>
+                        </a>
+                        ''',
+                        unsafe_allow_html=True
+                    )
+                else:
+                    st.warning("⚠️ رقم ولي الأمر غير مسجل لـ هذا الطالب! يمكنك تعديله من شاشة تكويد وإدارة الطلاب.")
+            else:
+                st.info("لا توجد حصص مسجلة لهذا الطالب في الفترة المحددة.")
         else:
-            st.info("لا توجد سجلات درجات للمجموعة المحددة.")
+            st.info("لا يوجد طلاب مسجلين في هذه المجموعة.")
+    else:
+        st.info("لا توجد مجموعات مسجلة.")
 
 # ---------------------------------------------------------
-# 6️⃣ تقرير الإيرادات والتحصيلات
+# 6️⃣ تقرير الإيرادات والتحصيلات (فلتر شهر وسنة)
 # ---------------------------------------------------------
 elif menu == "6️⃣ تقرير الإيرادات والتحصيلات" and not is_assistant:
-    st.header("💰 تقرير الإيرادات والتحصيلات")
-    res_att = supabase.table("attendance").select("*").eq("user_id", current_user_id).execute()
-    df_att = pd.DataFrame(res_att.data or [])
+    st.header("6️⃣ تقرير الإيرادات والتحصيلات")
 
-    if not df_att.empty:
-        total_rev = df_att["paid_amount"].sum()
-        st.metric(label="إجمالي التحصيلات المالية (جنيه)", value=f"{total_rev:,.2f}")
+    col_m, col_y = st.columns(2)
+    with col_m:
+        months_arabic = [
+            "يناير (1)", "فبراير (2)", "مارس (3)", "أبريل (4)",
+            "مايو (5)", "يونيو (6)", "يوليو (7)", "أغسطس (8)",
+            "سبتمبر (9)", "أكتوبر (10)", "نوفمبر (11)", "ديسمبر (12)"
+        ]
+        selected_month_idx = st.selectbox("اختر الشهر:", list(range(1, 13)), format_func=lambda x: months_arabic[x-1], index=date.today().month - 1)
+    with col_y:
+        selected_year = st.number_input("اختر السنة:", min_value=2020, max_value=2035, value=date.today().year)
+
+    res_groups = (
+        supabase.table("groups")
+        .select("*")
+        .eq("user_id", current_user_id)
+        .execute()
+    )
+    df_groups = pd.DataFrame(res_groups.data or [])
+
+    if not df_groups.empty:
+        num_days = calendar.monthrange(selected_year, selected_month_idx)[1]
+        start_date_str = f"{selected_year}-{selected_month_idx:02d}-01"
+        end_date_str = f"{selected_year}-{selected_month_idx:02d}-{num_days:02d}"
+
+        rev_data = []
+        total_all_groups = 0.0
+
+        for idx, grp in df_groups.iterrows():
+            g_id = int(grp["id"])
+            res_rev = (
+                supabase.table("attendance")
+                .select("paid_amount")
+                .eq("group_id", g_id)
+                .gte("session_date", start_date_str)
+                .lte("session_date", end_date_str)
+                .execute()
+            )
+            group_total = sum(item.get("paid_amount", 0.0) for item in (res_rev.data or []))
+            total_all_groups += group_total
+
+            rev_data.append({
+                "اسم المجموعة": grp["group_name"],
+                "المبلغ المحصل": group_total,
+            })
 
         st.markdown("---")
-        st.subheader("تفاصيل التحصيلات حسب التاريخ")
-        daily_rev = df_att.groupby("session_date")["paid_amount"].sum().reset_index()
-        daily_rev.columns = ["التاريخ", "الإيراد (جنيه)"]
-        st.dataframe(daily_rev, use_container_width=True)
+        st.markdown(f"##### 📊 إجمالي الإيرادات لشهر **{selected_month_idx}/{selected_year}**")
+        
+        df_rev = pd.DataFrame(rev_data)
+        st.dataframe(df_rev, use_container_width=True)
+
+        st.success(f"💰 **إجمالي التحصيلات الكلية لجميع المجموعات:** {total_all_groups:,.2f} ج.م")
     else:
-        st.info("لا توجد تحصيلات مالية مسجلة بعد.")
+        st.info("لا توجد مجموعات مسجلة.")
 
 # ---------------------------------------------------------
 # 🔐 تغيير كلمة مرور المساعد
 # ---------------------------------------------------------
 elif menu == "🔐 تغيير كلمة مرور المساعد" and not is_assistant:
     st.header("🔐 تغيير كلمة مرور المساعد")
-    res_asst = supabase.table("users").select("*").eq("parent_teacher_id", current_user_id).eq("role", "assistant").execute()
-    df_asst = pd.DataFrame(res_asst.data or [])
 
-    if not df_asst.empty:
-        sel_asst_name = st.selectbox("اختر المساعد:", df_asst["teacher_name"].tolist())
-        asst_id = int(df_asst[df_asst["teacher_name"] == sel_asst_name]["id"].values[0])
-        new_pass_asst = st.text_input("كلمة المرور الجديدة للمساعد:", type="password")
+    res_assistants = (
+        supabase.table("users")
+        .select("*")
+        .eq("parent_teacher_id", current_user_id)
+        .eq("role", "assistant")
+        .execute()
+    )
+    df_assistants = pd.DataFrame(res_assistants.data or [])
 
-        if st.button("تحديث كلمة المرور", use_container_width=True):
-            if new_pass_asst.strip():
-                supabase.table("users").update({"password_hash": new_pass_asst.strip()}).eq("id", asst_id).execute()
-                st.success(f"تم تغيير كلمة مرور المساعد '{sel_asst_name}' بنجاح! ✅")
+    if not df_assistants.empty:
+        sel_assistant = st.selectbox(
+            "اختر المساعد المراد تغيير كلمة مروره:",
+            df_assistants["teacher_name"].tolist(),
+        )
+        asst_data = df_assistants[
+            df_assistants["teacher_name"] == sel_assistant
+        ].iloc[0]
+
+        new_asst_pass = st.text_input("كلمة المرور الجديدة:", type="password")
+
+        if st.button("حفظ كلمة المرور الجديدة للمساعد", use_container_width=True):
+            if new_asst_pass.strip():
+                supabase.table("users").update({
+                    "password_hash": new_asst_pass.strip()
+                }).eq("id", int(asst_data["id"])).execute()
+                st.success(f"تم تغيير كلمة مرور المساعد '{sel_assistant}' بنجاح! ✅")
             else:
-                st.warning("يرجى إدخال كلمة المرور الجديدة.")
+                st.warning("يرجى كتابة كلمة المرور الجديدة.")
     else:
-        st.info("لا يوجد مساعدون مرتبطون بحسابك حالياً.")
+        st.info("لا يوجد مساعدون مرادطون بحسابك حالياً.")
 
 # ---------------------------------------------------------
 # 🔑 تغيير كلمة المرور الخاصة بي
 # ---------------------------------------------------------
 elif menu == "🔑 تغيير كلمة المرور الخاصة بي":
     st.header("🔑 تغيير كلمة المرور الخاصة بي")
-    curr_pass = st.text_input("كلمة المرور الحالية:", type="password")
-    new_pass = st.text_input("كلمة المرور الجديدة:", type="password")
-    confirm_pass = st.text_input("تأكيد كلمة المرور الجديدة:", type="password")
 
-    if st.button("حفظ كلمة المرور الجديدة", use_container_width=True):
-        if curr_pass == st.session_state.user["password_hash"]:
-            if new_pass.strip() and new_pass == confirm_pass:
-                u_id = int(st.session_state.user["id"])
-                supabase.table("users").update({"password_hash": new_pass.strip()}).eq("id", u_id).execute()
-                st.session_state.user["password_hash"] = new_pass.strip()
-                st.success("تم تحديث كلمة المرور الخاصة بك بنجاح! 🔑")
+    old_pass = st.text_input("كلمة المرور الحالية:", type="password")
+    new_pass1 = st.text_input("كلمة المرور الجديدة:", type="password")
+    new_pass2 = st.text_input("تأكيد كلمة المرور الجديدة:", type="password")
+
+    if st.button("تحديث كلمة المرور", use_container_width=True):
+        if old_pass and new_pass1 and new_pass2:
+            if old_pass == st.session_state.user["password_hash"]:
+                if new_pass1 == new_pass2:
+                    supabase.table("users").update({
+                        "password_hash": new_pass1.strip()
+                    }).eq("id", st.session_state.user["id"]).execute()
+                    st.session_state.user["password_hash"] = new_pass1.strip()
+                    st.success("تم تغيير كلمة المرور بنجاح! ✅")
+                else:
+                    st.error("كلمتا المرور الجديدتان غير متطابقتين.")
             else:
-                st.error("كلمتا المرور غير متطابقتين أو فارغتين.")
+                st.error("كلمة المرور الحالية غير صحيحة.")
         else:
-            st.error("كلمة المرور الحالية غير صحيحة.")
+            st.warning("يرجى ملء جميع الحقول المطلوب تعبئتها.")
 
 render_footer()
