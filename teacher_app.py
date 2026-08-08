@@ -1,5 +1,6 @@
 import calendar
 from datetime import date, datetime
+import re
 import urllib.parse
 import pandas as pd
 import streamlit as st
@@ -272,7 +273,7 @@ def login_screen():
                                         "password_hash": new_pass.strip(),
                                         "teacher_name": new_teacher.strip(),
                                         "role": role_val,
-                                        "parent_teacher_id": parent_parent_teacher_id if account_type == "مساعد للمعلم" else None,
+                                        "parent_teacher_id": parent_teacher_id if account_type == "مساعد للمعلم" else None,
                                     }).execute()
                                     st.success(f"تم إنشاء حساب '{new_teacher}' بنجاح! ✅")
                                     st.rerun()
@@ -814,7 +815,7 @@ elif menu == "💵 تسجيل التحصيل المالي" and not is_assistant:
                     pay_records.append({
                         "student_id": s_id,
                         "amount": p_amount,
-                        "paid": 1 if p_status else 0,
+                        "paid": 1 if (p_status or p_amount > 0) else 0,
                     })
                     st.markdown("---")
 
@@ -850,7 +851,7 @@ elif menu == "💵 تسجيل التحصيل المالي" and not is_assistant:
                     st.rerun()
 
 # ---------------------------------------------------------
-# 3️⃣ كشف حساب طالب / مجموعة
+# 3️⃣ كشف حساب طالب / مجموعة (ربط تلقائي لحالة الدفع)
 # ---------------------------------------------------------
 elif menu == "3️⃣ كشف حساب طالب / مجموعة":
     st.header("📊 كشف حساب طالب / مجموعة")
@@ -907,8 +908,11 @@ elif menu == "3️⃣ كشف حساب طالب / مجموعة":
                 df_att["الحضور"] = df_att["attended"].apply(
                     lambda x: "حضر ✅" if x else "غائب ❌"
                 )
-                df_att["حالة الدفع"] = df_att["paid"].apply(
-                    lambda x: "تم الدفع 💵" if x else "لم يدفع ⚠️"
+                
+                # ربط تلقائي بحالة الدفع بناءً على التسجيل المالي (سواء خانة تم الدفع أو المبلغ)
+                df_att["حالة الدفع"] = df_att.apply(
+                    lambda row: "تم الدفع 💵" if (row.get("paid") == 1 or float(row.get("paid_amount", 0.0)) > 0) else "لم يدفع ⚠️",
+                    axis=1
                 )
 
                 disp_df = df_att[[
@@ -932,7 +936,7 @@ elif menu == "3️⃣ كشف حساب طالب / مجموعة":
 
                 st.dataframe(disp_df, use_container_width=True)
             else:
-                st.info("لا توجد سجلات هامة لعرضها.")
+                st.info("لا توجد سجلات مسجلة لعرضها.")
         else:
             st.info("لا يوجد طلاب مسجلين في هذه المجموعة.")
     else:
@@ -977,7 +981,7 @@ elif menu == "4️⃣ تقرير موقف الدفع والغياب":
 
                 total_sessions = len(att_data)
                 absent_count = sum(1 for a in att_data if not a.get("attended"))
-                unpaid_count = sum(1 for a in att_data if not a.get("paid"))
+                unpaid_count = sum(1 for a in att_data if not (a.get("paid") == 1 or float(a.get("paid_amount", 0.0)) > 0))
                 total_paid = sum(a.get("paid_amount", 0.0) for a in att_data)
 
                 summary_list.append({
@@ -997,7 +1001,7 @@ elif menu == "4️⃣ تقرير موقف الدفع والغياب":
         st.info("لا توجد مجموعات مسجلة.")
 
 # ---------------------------------------------------------
-# 5️⃣ تقرير النتائج الأكاديمية (مع إرسال الواتساب المطلوب)
+# 5️⃣ تقرير النتائج الأكاديمية (مع تفعيل إرسال الواتساب)
 # ---------------------------------------------------------
 elif menu == "5️⃣ تقرير النتائج الأكاديمية":
     st.header("🏆 تقرير النتائج الأكاديمية")
@@ -1078,10 +1082,10 @@ elif menu == "5️⃣ تقرير النتائج الأكاديمية":
                 ]
 
                 st.markdown("---")
-                st.markdown(f"##### 📊 نتائج الطالب: **{selected_std_name}** للفتـرة من **{start_date}** إلى **{end_date}**")
+                st.markdown(f"##### 📊 نتائج الطالب: **{selected_std_name}** للفترة من **{start_date}** إلى **{end_date}**")
                 st.dataframe(disp_acad, use_container_width=True)
 
-                # صياغة نص الواتساب حسب الطلب تماماً
+                # صياغة النص المطلوب تماماً
                 sessions_text_list = []
                 for _, row in df_acad.iterrows():
                     att_status = "حضر" if row["attended"] else "غائب"
@@ -1101,22 +1105,27 @@ elif menu == "5️⃣ تقرير النتائج الأكاديمية":
                 whatsapp_message = (
                     f"السلام عليكم\n"
                     f"ولي امر الطالب / {selected_std_name}\n\n"
-                    f"إليك تقرير الحضور والنتائج الأكاديمية للترة من {start_date} إلى {end_date}:\n\n"
+                    f"إليك تقرير الحضور والنتائج الأكاديمية للفترة من {start_date} إلى {end_date}:\n\n"
                     f"{sessions_text}\n\n"
                     f"{footer_sig}"
                 )
 
-                parent_phone = selected_std_data.get("parent_phone", "").strip()
+                raw_phone = str(selected_std_data.get("parent_phone", "")).strip()
+                # تنظيف الرقم وإعداده للصيغة الدولية
+                clean_phone = re.sub(r"\D", "", raw_phone)
+                if clean_phone.startswith("0"):
+                    clean_phone = "2" + clean_phone  # إضافة كود مصر بشكل افتراضي في حال إدخال رقم محلي
 
                 st.markdown("---")
-                if parent_phone:
+                if clean_phone:
                     encoded_msg = urllib.parse.quote(whatsapp_message)
-                    whatsapp_url = f"https://wa.me/{parent_phone}?text={encoded_msg}"
+                    # رابط موثوق ومباشر للواتساب
+                    whatsapp_url = f"https://api.whatsapp.com/send?phone={clean_phone}&text={encoded_msg}"
                     st.markdown(
                         f'''
-                        <a href="{whatsapp_url}" target="_blank">
-                            <button style="background-color: #25D366; color: white; border: none; padding: 12px 24px; font-size: 16px; border-radius: 8px; cursor: pointer; width: 100%; font-weight: bold;">
-                                📲 إرسال التقرير عبر واتساب ولي الأمر ({parent_phone})
+                        <a href="{whatsapp_url}" target="_blank" style="text-decoration: none;">
+                            <button style="background-color: #25D366; color: white; border: none; padding: 14px 28px; font-size: 17px; border-radius: 8px; cursor: pointer; width: 100%; font-weight: bold;">
+                                📲 إرسال التقرير عبر واتساب ولي الأمر ({raw_phone})
                             </button>
                         </a>
                         ''',
@@ -1227,7 +1236,7 @@ elif menu == "🔐 تغيير كلمة مرور المساعد" and not is_assis
             else:
                 st.warning("يرجى كتابة كلمة المرور الجديدة.")
     else:
-        st.info("لا يوجد مساعدون مرادطون بحسابك حالياً.")
+        st.info("لا يوجد مساعدون مرتبطون بحسابك حالياً.")
 
 # ---------------------------------------------------------
 # 🔑 تغيير كلمة المرور الخاصة بي
